@@ -1,6 +1,6 @@
 # Chainsmoker
 
-Chainsmoker is a streamlined visualization tool for analyzing network "attack chains" by automatically mapping discovered IOCs to plotted out attack chains
+Chainsmoker is a streamlined visualization tool for analyzing network "attack chains" by automatically mapping discovered IOCs to plotted out attack chains. Generated attack chain diagrams are served via Dash locally, which can be configured as needed in the code. 
 
 ## Features
 - **Visualize Attack Chains**: Render clear, interactive graphs for identifying connections between IP addresses and protocols involved in attack paths.

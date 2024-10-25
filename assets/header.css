@@ -1,0 +1,29 @@
+tr:nth-child(even) {
+    background-color: #414242;
+  }
+
+  /* Styles for the notes table */
+.notes-table {
+    width: 100%;
+    border-collapse: collapse;
+    padding: 24px;
+}
+
+.cell-table {
+  display: block;
+  margin: 5;
+}
+
+.page-title {
+  font-family: 'Lucida Console', 'Courier New', monospace;
+  padding: 8px;  /* Adds padding to the left */
+}
+
+.text-box {
+  padding: 8px;  /* Adds padding to the left */
+  margin: 20px;   /* Adds margin to the left */
+}
+
+.fig {
+  border: 1px solid #ddd;
+}

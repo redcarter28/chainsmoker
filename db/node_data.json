@@ -1,0 +1,74 @@
+{
+  "node_id_1": {
+    "notes": "This is a note for node 1"
+  },
+  "node_id_2": {
+    "notes": "This is a note for node 2"
+  },
+  "7a399486264f7906b5a9fa0a29849a4805a4a4ce": {
+    "notes": [
+      {
+        "operator": "Ekardt",
+        "tactic": "Initial Access",
+        "date": "07-25-2024",
+        "note": "Fake and made uFake and made upFake and madeFake and made up"
+      },
+      {
+        "operator": "Mundy",
+        "tactic": "Execution",
+        "date": "07-25-2024",
+        "note": "DHCP is automatic"
+      },
+      {
+        "operator": "Molina",
+        "tactic": "Execution",
+        "date": "07-25-2024, 0721",
+        "note": "test"
+      }
+    ]
+  },
+  "151ad27c72e5a7cda7ca0ebb2659a61288eaa211": {
+    "notes": [
+      {
+        "operator": "Molina",
+        "tactic": "Exfiltration",
+        "date": "07-25-2024",
+        "note": "Fuck no, baby!"
+      },
+      {
+        "operator": "McDowell",
+        "tactic": "Persistence",
+        "date": "07-25-2024",
+        "note": "Unqualified Attendee"
+      },
+      {
+        "operator": "Molina",
+        "tactic": "Persistence",
+        "date": "test",
+        "note": "test"
+      },
+      {
+        "operator": "test",
+        "tactic": "Privilege Escalation",
+        "date": "eaeaweawedaw",
+        "note": "aeawewae"
+      }
+    ]
+  },
+  "988a0b81e74562f9db5a9317cdeecf65d0a18154": {
+    "notes": [
+      {
+        "operator": "Molina",
+        "tactic": "Credential Access",
+        "date": "07-25-2024, 0721",
+        "note": "shit cleartext dawg\ud83d\udc80"
+      },
+      {
+        "operator": "Hard",
+        "tactic": "Persistence",
+        "date": "07-27-2024",
+        "note": "Lorem ipsum"
+      }
+    ]
+  }
+}

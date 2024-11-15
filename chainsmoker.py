@@ -4,7 +4,7 @@ import json
 import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
 import pandas as pd
-from itertools import chain, product
+from itertools import product
 import hashlib
 import os 
 
@@ -297,7 +297,7 @@ def save_json(n_clicks, tactic, date, name, note_input, clickData):
     
     return dash.no_update
 
-@callback(
+""" @callback(
     Output('hover-data', 'children'),
     Input('attack-chain-graph', 'hoverData')
 )
@@ -308,7 +308,7 @@ def hoverColor(hoverData):
 
     for trace in new_fig.data:
         trace.marker.color = list(range(6))
-        trace.market.colorscale='sunset'
+        trace.market.colorscale='sunset' """
 
 
 if __name__ == '__main__':

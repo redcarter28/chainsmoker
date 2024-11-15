@@ -11,7 +11,7 @@ tr:nth-child(even) {
 
 .cell-table {
   display: block;
-  margin: 5;
+  margin: 50;
 }
 
 .page-title {

@@ -43,8 +43,6 @@ df['Date/Time MPNET'] = df['Date/Time MPNET'].fillna('No Data')
 #remove weird unnamed bug
 df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
 
-
-
 #load json DB
 if os.path.exists('db/node_data.json'):
     with open('db/node_data.json', 'r') as file:
@@ -96,21 +94,24 @@ for chain_id in df['Attack Chain'].dropna().unique():
 
     chain_df = df[df['Attack Chain'] == chain_id]
 
+    # Create a list of formatted strings combining 'Details' and 'Notes' for each point
+    hover_text = [f"<b>Details:</b> {details} <br><b>Notes:</b> {notes}" for details, notes in zip(chain_df['Details'], chain_df['Notes'])]
+
+
     fig.add_trace(go.Scatter(
         x=chain_df['Date/Time MPNET'].tolist() + [None],
-        #y=[f"{source} -> {target}" for source, target in zip(df['Source Hostname/IP'], df['Target Hostname/IP'])],
         y=chain_df['MITRE Tactic'].tolist() + [None],
-        
         mode='lines+markers',
         marker=dict(
             size=12,
-            color=list(range(6)), colorscale='sunset',
+            color=list(range(len(chain_df))),  # Adjusting color range to match the length of chain_df
+            colorscale='sunset',
             line=dict(width=1, color='DarkSlateGrey')
         ),
         line=dict(color='grey', width=2),
-        text=chain_df['Details'],
+        text=hover_text,  # Use the formatted hover text
         hoverinfo='text',
-        showlegend=False
+        showlegend=False,
     ))
 
 
@@ -209,9 +210,10 @@ app.layout = html.Div(children=[
             placeholder='Enter your notes here...',
             className='text-box'
         ),
-        html.Button('Submit', id='save-button', n_clicks=0, style={'padding': '6px', 'margin-top': '10px'}),
-        
-        html.Pre(id='save-fdbk', style={'margin-top': '10px'})
+        html.Div([
+            html.Button('Submit', id='save-button', n_clicks=0, style={'padding': '6px', 'margin-top': '2px'}),
+            html.Pre(id='save-fdbk', style={'margin-top': '4px'})
+        ], style={'text-align':'left'})
     ], className='three columns', style={'margin-left': '12px'})
 ])
 
@@ -313,4 +315,3 @@ def hoverColor(hoverData):
 
 if __name__ == '__main__':
     app.run_server(port=8080, host = '0.0.0.0')
-

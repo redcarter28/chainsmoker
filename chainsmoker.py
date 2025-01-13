@@ -16,8 +16,6 @@ styles = {
     }
 }
 
-
-
 # Read data from Excel file using openpyxl
 df = pd.read_excel('data/data2.xlsx', engine='openpyxl')
 

@@ -7,6 +7,8 @@ import pandas as pd
 from itertools import product
 import hashlib
 import os 
+import re
+import time
 
 #html bootstrap
 styles = {
@@ -180,6 +182,8 @@ form = html.Div([
 # Layout of the Dash app
 app.layout = html.Div(children=[
 
+    dcc.Location(id='url', refresh=True),
+
     # Header section with the logo and title
     html.Div([
         html.H1(children=[
@@ -231,14 +235,15 @@ def hash_node(clickData):
 def hash_record():
     pass
 
-@callback(
+""" @callback(
     Output('click-data', 'children'),
     Input('attack-chain-graph', 'clickData'))
 def display_click_data(clickData):
     #return json.dumps(clickData, indent=2)
     node_id = hash_node(clickData)
 
-    title = clickData['points'][0].get('text', '')
+    #regex out the <b> and <br> tags inserted earlier
+    title = re.sub(r'<.*?>', '', clickData['points'][0].get('text', ''))
 
     if(os.path.exists('db/node_data.json')):
         if(node_id in data):
@@ -268,7 +273,8 @@ def display_click_data(clickData):
         return f'{title}\n\nNotes are empty. Consider hunting harder.'
 
 @callback(
-    Output('save-fdbk', 'children'),
+    [Output('save-fdbk', 'children'),
+     Output('click-data', 'children')],
     Input('save-button', 'n_clicks'),
     State('mitre-dropdown', 'value'),
     State('mpnet-date', 'value'),
@@ -296,6 +302,80 @@ def save_json(n_clicks, tactic, date, name, note_input, clickData):
         return "Notes saved."
     
     return dash.no_update
+ """
+
+@callback(
+    [Output('save-fdbk', 'children'),
+     Output('click-data', 'children')],
+    [Input('save-button', 'n_clicks'),
+     Input('attack-chain-graph', 'clickData')],
+    [State('mitre-dropdown', 'value'),
+     State('mpnet-date', 'value'),
+     State('name-input', 'value'),
+     State('note-input', 'value')],
+    prevent_initial_call=True
+)
+def main_callback(n_clicks, clickData, tactic, date, name, note_input):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        triggered_id = None
+    else:
+        triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
+
+    # Check if node data is present
+    if not clickData:
+        return "Error: No node selected.", dash.no_update
+
+    node_id = hash_node(clickData)
+    if not node_id:
+        return "Error: Unable to determine node ID.", dash.no_update
+    
+    # Ensure node exists in data
+    if node_id not in data:
+        data[node_id] = {'notes': []}
+
+    # Only add a new note if the save button triggered the callback
+    if triggered_id == 'save-button' and note_input:
+        new_entry = {"operator": name, "tactic": tactic, "date": date, "note": note_input}
+        data[node_id]['notes'].append(new_entry)
+
+        # Save updated data
+        with open('db/node_data.json', 'w') as file:
+            json.dump(data, file, indent=2)
+        
+        feedback = 'Notes Saved!'
+    else:
+        feedback = ''  # No update to feedback if the node was clicked
+
+    hoverdata = re.sub(r'<.*?>', '', clickData['points'][0].get('text', '')).replace('Notes:', '\nNotes:')
+
+    # Build the table from current notes
+    notes = data[node_id]['notes']
+    if notes:
+        table = dash_table.DataTable(
+            data=notes, 
+            columns=[{"name": key, "id": key} for key in notes[0].keys()],
+            id='notes-table',
+            style_header={'backgroundColor': 'rgb(30, 30, 30)', 'color': 'white'},
+            style_data={'backgroundColor': 'rgb(50, 50, 50)', 'color': 'white'},
+            style_cell={'textAlign': 'left', 'minWidth': '60px', 'width': '180px', 'maxWidth': '960px'}
+        )
+        table_div = html.Div([hoverdata, html.H6("Submitted Notes:"), table])
+    else:
+        table_div = html.Div("Notes are empty. Consider hunting harder.")
+
+    return feedback, table_div
+
+
+
+""" @callback(
+    Output('url', 'pathname'),  # Redirect to the same page
+    Input('save-button', 'n_clicks'),
+    prevent_initial_call=True
+)
+def reload_page(n_clicks):
+    time.sleep(2)
+    return "/"  # This triggers a page refresh """
 
 """ @callback(
     Output('hover-data', 'children'),

@@ -16,6 +16,18 @@
         "tactic": "Execution",
         "date": "07-25-2024, 0721",
         "note": "yes"
+      },
+      {
+        "operator": "Ranalli",
+        "tactic": "Credential Access",
+        "date": "07-25-2024, 0721",
+        "note": "test 2"
+      },
+      {
+        "operator": "Colon",
+        "tactic": "Discovery",
+        "date": "07-25-2024, 0721",
+        "note": "discovery saw blalblabla;"
       }
     ]
   },

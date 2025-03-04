@@ -70,8 +70,6 @@ fig = go.Figure()
         hovertext=row['Details'],
         marker=dict(color='rgba(0, 0, 0, 0)')  # Transparent bar for Gantt effect
     )) """
-
-
 """ # Add scatter points for each event
 fig.add_trace(go.Scatter(
     x=df['Date/Time MPNET'].tolist() + [None],
@@ -104,6 +102,7 @@ for chain_id in df['Attack Chain'].dropna().unique():
         mode='lines+markers',
         marker=dict(
             size=12,
+            opacity=0.8,
             color=list(range(len(chain_df))),  # Adjusting color range to match the length of chain_df
             colorscale='sunset',
             line=dict(width=1, color='DarkSlateGrey')
@@ -130,6 +129,7 @@ fig.update_layout(
     margin=dict(l=50, r=50, t=50, b=50),  # Add some padding around the chart
     hovermode='closest'
 )
+
 
 name_field = html.Div(
     [   
@@ -183,6 +183,7 @@ form = html.Div([
 app.layout = html.Div(children=[
 
     dcc.Location(id='url', refresh=True),
+    dcc.Store(id='plot-data', data=fig.to_plotly_json()),
 
     # Header section with the logo and title
     html.Div([
@@ -308,14 +309,15 @@ def save_json(n_clicks, tactic, date, name, note_input, clickData):
     [Output('save-fdbk', 'children'),
      Output('click-data', 'children')],
     [Input('save-button', 'n_clicks'),
-     Input('attack-chain-graph', 'clickData')],
+     Input('attack-chain-graph', 'clickData'),
+     Input('attack-chain-graph', 'hoverData')],
     [State('mitre-dropdown', 'value'),
      State('mpnet-date', 'value'),
      State('name-input', 'value'),
      State('note-input', 'value')],
     prevent_initial_call=True
 )
-def main_callback(n_clicks, clickData, tactic, date, name, note_input):
+def update_webpage_callback(n_clicks, clickData, hoverData, tactic, date, name, note_input):
     ctx = dash.callback_context
     if not ctx.triggered:
         triggered_id = None
@@ -360,9 +362,9 @@ def main_callback(n_clicks, clickData, tactic, date, name, note_input):
             style_data={'backgroundColor': 'rgb(50, 50, 50)', 'color': 'white'},
             style_cell={'textAlign': 'left', 'minWidth': '60px', 'width': '180px', 'maxWidth': '960px'}
         )
-        table_div = html.Div([hoverdata, html.H6("Submitted Notes:"), table])
+        table_div = html.Div([hoverdata, html.H6("Comments:"), table])
     else:
-        table_div = html.Div("Notes are empty. Consider hunting harder.")
+        table_div = html.Div([hoverdata, "\n\nComments are empty. Consider hunting harder."])
 
     return feedback, table_div
 

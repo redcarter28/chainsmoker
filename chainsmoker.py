@@ -8,7 +8,6 @@ from itertools import product
 import hashlib
 import os 
 import re
-import time
 
 #html bootstrap
 styles = {
@@ -93,8 +92,7 @@ for chain_id in df['Attack Chain'].dropna().unique():
     chain_df = df[df['Attack Chain'] == chain_id]
 
     # Create a list of formatted strings combining 'Details' and 'Notes' for each point
-    hover_text = [f"<b>Details:</b> {details} <br><b>Notes:</b> {notes}" for details, notes in zip(chain_df['Details'], chain_df['Notes'])]
-
+    hover_text = [f"<b>Details:</b> {details} <br><b>Notes:</b> {notes}<br><b>Found By:</b> {operator} <br><b>Attack Chain:</b> {att}" for details, notes, operator, att in zip(chain_df['Details'], chain_df['Notes'], chain_df['Operator'], chain_df['Attack Chain'])]
 
     fig.add_trace(go.Scatter(
         x=chain_df['Date/Time MPNET'].tolist() + [None],
@@ -219,7 +217,7 @@ app.layout = html.Div(children=[
         ], style={'text-align':'left'})
     ], className='three columns', style={'margin-left': '12px'})
 ])
-
+app.title = 'Chainsmoker'
 
 
 

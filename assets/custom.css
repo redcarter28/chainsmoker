@@ -1,0 +1,104 @@
+/* ===== Global Styling ===== */
+html, body {
+    margin: 0;
+    padding: 0;
+    font-family: "Open Sans", sans-serif; /* or your preferred modern font */
+    background-color: #1a1a1a; /* Slightly lighter than pure black */
+    color: #f0f0f0; /* Softer white text */
+}
+
+/* Make headings stand out with a bold, modern look */
+h1, h2, h3, h4, h5, h6 {
+    color: #ffffff;
+    font-weight: 600;
+    margin: 0;
+    padding: 8px 0;
+}
+
+/* ===== Graph Container ===== */
+.fig {
+    border: 1px solid #444; /* Subtle border */
+    border-radius: 6px; /* Rounded corners for a modern look */
+    padding: 8px;
+    margin: 12px;
+    background-color: #242424; /* Slightly different from main bg */
+}
+
+/* ===== Node Data Container ===== */
+.three.columns {
+    background-color: #242424;
+    border-radius: 6px;
+    padding: 12px;
+    margin: 12px;
+}
+
+/* Adjust the Markdown label styling */
+.three.columns > div > .dash-markdown {
+    color: #f0f0f0;
+    font-weight: 500;
+}
+
+/* ===== Buttons & Inputs ===== */
+button, .btn, .btn-primary {
+    background-color: #343a40; /* Dark gray */
+    color: #f0f0f0;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 8px 12px;
+    transition: background-color 0.2s ease;
+}
+
+button:hover, .btn:hover, .btn-primary:hover {
+    background-color: #4f575c; /* Slightly lighter on hover */
+    cursor: pointer;
+}
+
+input[type="text"], textarea, .dash-input, .dash-textarea {
+    background-color: #2b2b2b;
+    color: #f0f0f0;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 6px;
+    width: 100%;
+}
+
+/* ===== DataTable styling ===== */
+#notes-table .dash-table-container .dash-spreadsheet {
+    background-color: #2b2b2b;
+}
+
+#notes-table .dash-table-container .dash-spreadsheet-container {
+    border: none;
+}
+
+#notes-table .dash-header div.dash-header-cell {
+    background-color: #333333;
+    border-bottom: 1px solid #555;
+    color: #f0f0f0;
+}
+
+#notes-table .dash-cell {
+    border-bottom: 1px solid #444;
+}
+
+/* Hover effect on table rows */
+#notes-table .dash-cell:hover {
+    background-color: #3a3a3a;
+}
+
+/* ===== Title and Logo ===== */
+.page-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 2em;
+}
+
+.page-title img {
+    border-radius: 50%;
+}
+
+/* Subtle hover effect for clickable items (if you want it for your graph, etc.) */
+.fig:hover {
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.1);
+}

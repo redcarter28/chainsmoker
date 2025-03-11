@@ -102,3 +102,17 @@ input[type="text"], textarea, .dash-input, .dash-textarea {
 .fig:hover {
     box-shadow: 0 0 8px rgba(255, 255, 255, 0.1);
 }
+
+.fancy-button {
+    background-color: #343a40;
+    color: #f0f0f0;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 10px 20px;
+    transition: transform 0.1s ease-in-out, background-color 0.2s ease;
+  }
+  
+.fancy-button:hover {
+transform: scale(1.05);
+background-color: #4f575c;
+}

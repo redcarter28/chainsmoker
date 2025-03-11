@@ -177,6 +177,85 @@ form = html.Div([
     dbc.Form([name_field, mitre_drop, mpnet_date_field], style={'padding': '4px'}),
 ])
 
+node_form = html.Div(
+    dbc.Form(
+        [
+            html.Div(
+                [   
+                    dbc.Input(id='mpnet-date-input-node', placeholder='Date/Time MPNET (MM/DD/YY, XXXX)', style={'width': '100%'}),
+                ],
+                className='InputField',  
+                style={'width': '20%'}  
+            ), 
+            html.Div(
+                dcc.Dropdown(
+                    options=[
+                        {'label': 'Initial Access', 'value': 'Initial Access'},
+                        {'label': 'Execution', 'value': 'Execution'},
+                        {'label': 'Persistence', 'value': 'Persistence'},
+                        {'label': 'Privilege Escalation', 'value': 'Privilege Escalation'},
+                        {'label': 'Defense Evasion', 'value': 'Defense Evasion'},
+                        {'label': 'Credential Access', 'value': 'Credential Access'},
+                        {'label': 'Discovery', 'value': 'Discovery'},
+                        {'label': 'Lateral Movement', 'value': 'Lateral Movement'},
+                        {'label': 'Collection', 'value': 'Collection'},
+                        {'label': 'C2', 'value': 'C2'},
+                        {'label': 'Exfiltration', 'value': 'Exfiltration'}
+                    ],
+                    placeholder="Select MITRE Tactic",
+                    clearable=False,
+                    style={'width': '100%', 'color': 'black'},
+                    id='mitre-dropdown-node'
+                ),
+                className='InputField',  # Using a consistent class name for styling
+                style={'width': '19.95%'}  
+            ),
+            html.Div(
+                [   
+                    dbc.Input(id='src-ip-node', placeholder='Source Hostname/IP', style={'width': '100%'}),
+                ],
+                className='InputField',  
+                style={'width': '20%'}  
+            ),
+            html.Div(
+                [   
+                    dbc.Input(id='dst-ip-node', placeholder='Destination Hostname/IP', style={'width': '100%'}),
+                ],
+                className='InputField',  
+                style={'width': '20%'}  
+            ),
+            html.Div(
+                [   
+                    dbc.Input(id='details-input-node', placeholder='Details', style={'width': '100%'}),
+                ],
+                className='InputField',  
+                style={'width': '20%'}  
+            ),
+            html.Div(
+                [   
+                    dbc.Input(id='notes-input-node', placeholder='Notes', style={'width': '100%'}),
+                ],
+                className='InputField',  
+                style={'width': '20%'}  
+            ),
+            html.Div(
+                [   
+                    dbc.Input(id='name-input-node', placeholder='Operator', style={'width': '100%'}),
+                ],
+                className='InputField',  
+                style={'width': '20%'}  
+            ),
+            html.Div(
+                [   
+                    dbc.Input(id='atk-chn-input-node', placeholder='Attack Chain', style={'width': '100%'}),
+                ],
+                className='InputField',  
+                style={'width': '20%'}  
+            )
+        ], 
+        style={'padding': '4px'})
+)
+
 # Layout of the Dash app
 app.layout = html.Div(children=[
 
@@ -212,10 +291,17 @@ app.layout = html.Div(children=[
             className='text-box'
         ),
         html.Div([
-            html.Button('Submit', id='save-button', n_clicks=0, style={'padding': '6px', 'margin-top': '2px'}),
+            html.Button('Submit', id='save-button', n_clicks=0, style={'padding': '6px', 'margin-top': '2px'}, className='fancy-button'),
             html.Pre(id='save-fdbk', style={'margin-top': '4px'})
-        ], style={'text-align':'left'})
+        ], style={'text-align':'left'}),
+        node_form,
+        html.Div([
+            html.Button('Submit', id='save-button-node', n_clicks=0, style={'padding': '6px', 'margin-top': '2px'}, className='fancy-button'),
+            html.Pre(id='save-fdbk-node', style={'margin-top': '4px'})
+        ], style={'text-align':'left'}),
     ], className='three columns', style={'margin-left': '12px'})
+    
+
 ])
 app.title = 'Chainsmoker'
 
@@ -366,7 +452,12 @@ def update_webpage_callback(n_clicks, clickData, hoverData, tactic, date, name, 
 
     return feedback, table_div
 
+""" @callback(
+    Input(),
 
+)
+def node_callback():
+    pass """
 
 """ @callback(
     Output('url', 'pathname'),  # Redirect to the same page

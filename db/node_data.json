@@ -1,0 +1,12 @@
+{
+  "ab1487c0cc31e8f84ad059172c93e8c5d7ac79b7": {
+    "notes": [
+      {
+        "operator": "McDowell",
+        "tactic": "Persistence",
+        "date": "04-12-2024, 2011",
+        "note": "$payload variable assigned to service running out of Temp, googleService.exe running from path C:\\users\\lucas.murray\\wmp.ps1"
+      }
+    ]
+  }
+}

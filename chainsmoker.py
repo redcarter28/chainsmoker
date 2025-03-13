@@ -324,15 +324,14 @@ def hash_record():
     [Output('save-fdbk', 'children'),
      Output('click-data', 'children')],
     [Input('save-button', 'n_clicks'),
-     Input('attack-chain-graph', 'clickData'),
-     Input('attack-chain-graph', 'hoverData')],
+     Input('attack-chain-graph', 'clickData')],
     [State('mitre-dropdown', 'value'),
      State('mpnet-date', 'value'),
      State('name-input', 'value'),
      State('note-input', 'value')],
     prevent_initial_call=True
 )
-def update_webpage_callback(n_clicks, clickData, hoverData, tactic, date, name, note_input):
+def update_webpage_callback(n_clicks, clickData, tactic, date, name, note_input):
     ctx = dash.callback_context
     if not ctx.triggered:
         triggered_id = None
@@ -392,7 +391,7 @@ def notes_hide(n_clicks):
         return {'display': 'block'}
     else:
         return {'display': 'none'}
-
+    
 
 if __name__ == '__main__':
     app.run_server(port=8080, host = '0.0.0.0')

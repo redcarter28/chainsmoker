@@ -116,3 +116,8 @@ input[type="text"], textarea, .dash-input, .dash-textarea {
 transform: scale(1.05);
 background-color: #4f575c;
 }
+
+.InputField {
+    width: 20%;
+    min-width: 400px;
+}

@@ -54,7 +54,7 @@ else:
 
 
 
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY], suppress_callback_exceptions=True)
 
 fig = go.Figure()
 
@@ -134,7 +134,6 @@ name_field = html.Div(
         dbc.Input(id='name-input', placeholder='Operator', style={'width': '100%'}),
     ],
     className='InputField',  # Use a consistent class name for styling
-    style={'width': '20%'}  # Consistent styling for width and margin
 )
 
 mitre_drop = html.Div(
@@ -158,19 +157,15 @@ mitre_drop = html.Div(
         id='mitre-dropdown'
     ),
     className='InputField',  # Use a consistent class name for styling
-    style={'width': '19.95%'}  # Consistent styling for width and margin
+    
 )
 
 mpnet_date_field = html.Div(
     [
-        dbc.Input(id='mpnet-date', placeholder='Date Occurred on MPNET', style={'width': '100%'}),
-        dbc.FormText(
-            'Date must be in MM-DD-YYYY, XXXX format\nex. 07-25-2024, 0721',
-            color='gray'
-        )
+        dbc.Input(id='mpnet-date', placeholder='Date/Time MPNET (MM/DD/YYYY, XXXX)', style={'width': '100%'}),
     ],
     className='InputField',  # Use a consistent class name for styling
-    style={'width': '20%'}  # Consistent styling for width and margin
+    
 )
 
 form = html.Div([
@@ -185,7 +180,7 @@ node_form = html.Div(
                     dbc.Input(id='mpnet-date-input-node', placeholder='Date/Time MPNET (MM/DD/YY, XXXX)', style={'width': '100%'}),
                 ],
                 className='InputField',  
-                style={'width': '20%'}  
+                #style={'width': '20%'}  
             ), 
             html.Div(
                 dcc.Dropdown(
@@ -208,53 +203,56 @@ node_form = html.Div(
                     id='mitre-dropdown-node'
                 ),
                 className='InputField',  # Using a consistent class name for styling
-                style={'width': '19.95%'}  
             ),
             html.Div(
                 [   
                     dbc.Input(id='src-ip-node', placeholder='Source Hostname/IP', style={'width': '100%'}),
                 ],
                 className='InputField',  
-                style={'width': '20%'}  
             ),
             html.Div(
                 [   
                     dbc.Input(id='dst-ip-node', placeholder='Destination Hostname/IP', style={'width': '100%'}),
                 ],
                 className='InputField',  
-                style={'width': '20%'}  
             ),
             html.Div(
                 [   
                     dbc.Input(id='details-input-node', placeholder='Details', style={'width': '100%'}),
                 ],
                 className='InputField',  
-                style={'width': '20%'}  
             ),
             html.Div(
                 [   
                     dbc.Input(id='notes-input-node', placeholder='Notes', style={'width': '100%'}),
                 ],
                 className='InputField',  
-                style={'width': '20%'}  
             ),
             html.Div(
                 [   
                     dbc.Input(id='name-input-node', placeholder='Operator', style={'width': '100%'}),
                 ],
                 className='InputField',  
-                style={'width': '20%'}  
             ),
             html.Div(
                 [   
                     dbc.Input(id='atk-chn-input-node', placeholder='Attack Chain', style={'width': '100%'}),
                 ],
                 className='InputField',  
-                style={'width': '20%'}  
             )
         ], 
         style={'padding': '4px'})
 )
+
+add_note_btn = html.Div([
+                    html.Button('Add Note', id='show-notes-btn-1', n_clicks=0, style={'padding': '6px', 'margin-top': '2px'}, className='fancy-button'),
+                    html.Pre(id='notes-btn-fdbk-1', style={'margin-top': '4px'})
+                ], style={'text-align':'left', 'padding-right':'20px', 'padding-top':'10px'})
+
+save_note_btn = html.Div([
+                html.Button('Submit', id='save-button', n_clicks=0, style={'padding': '6px', 'margin-top': '2px'}, className='fancy-button'),
+                html.Pre(id='save-fdbk', style={'margin-top': '4px'})
+            ], style={'text-align':'left', 'display': 'block'})
 
 # Layout of the Dash app
 app.layout = html.Div(children=[
@@ -269,8 +267,8 @@ app.layout = html.Div(children=[
             'Chainsmoker'
         ], className='page-title')
     ], style={'text-align': 'left', 'margin-bottom': '20px'}),
-
-    # Graph section
+    html.Div([]),
+    # Graph section 
     dcc.Graph(
         id='attack-chain-graph',
         figure=fig,
@@ -280,29 +278,31 @@ app.layout = html.Div(children=[
     html.Div(id='hover-data', style={'margin-left': '0px'}),
     # Node data and note input section
     html.Div([
-        
         dcc.Markdown("** Node Data:** "),
         html.Pre(id='click-data', style={'margin-left': '0px'}),
-        form,
-        dcc.Textarea(
-            id='note-input',
-            style={'width': '85%', 'height': 100, 'margin-top': '10px'},
-            placeholder='Enter your notes here...',
-            className='text-box'
-        ),
+        html.Div([  
+            form,
+            dcc.Textarea(
+                id='note-input',
+                style={'width': '85%', 'height': 100, 'margin-top': '10px'},
+                placeholder='Enter your notes here...',
+                className='text-box'
+            ),
+            save_note_btn,
+        ], id='notes-hide', style={'display': 'block'}),
+        
         html.Div([
-            html.Button('Submit', id='save-button', n_clicks=0, style={'padding': '6px', 'margin-top': '2px'}, className='fancy-button'),
-            html.Pre(id='save-fdbk', style={'margin-top': '4px'})
-        ], style={'text-align':'left'}),
-        node_form,
-        html.Div([
+            node_form,
             html.Button('Submit', id='save-button-node', n_clicks=0, style={'padding': '6px', 'margin-top': '2px'}, className='fancy-button'),
             html.Pre(id='save-fdbk-node', style={'margin-top': '4px'})
-        ], style={'text-align':'left'}),
+        ], id='node-hide',style={'text-align':'left', 'visible': 'block'}),
     ], className='three columns', style={'margin-left': '12px'})
     
 
 ])
+
+
+# general config
 app.title = 'Chainsmoker'
 
 
@@ -319,75 +319,6 @@ def hash_node(clickData):
 
 def hash_record():
     pass
-
-""" @callback(
-    Output('click-data', 'children'),
-    Input('attack-chain-graph', 'clickData'))
-def display_click_data(clickData):
-    #return json.dumps(clickData, indent=2)
-    node_id = hash_node(clickData)
-
-    #regex out the <b> and <br> tags inserted earlier
-    title = re.sub(r'<.*?>', '', clickData['points'][0].get('text', ''))
-
-    if(os.path.exists('db/node_data.json')):
-        if(node_id in data):
-            notes = data[node_id]['notes']
-            table = dash_table.DataTable(
-                notes, 
-                [{"name": key, "id": key} for key in notes[0].keys()], id='notes-table',
-                style_header={
-                    'backgroundColor': 'rgb(30, 30, 30)',
-                    'color': 'white'
-                },
-                style_data={
-                    'backgroundColor': 'rgb(50, 50, 50)',
-                    'color': 'white'
-                },
-                style_cell={
-                    'textAlign': 'left',
-                    'minWidth': '60px', 'width': '180px', 'maxWidth': '960px',
-                }
-            )
-            return table
-            
-        else:
-            return f'{title}\n\nNotes are empty. Consider hunting harder.'
-    else:
-    
-        return f'{title}\n\nNotes are empty. Consider hunting harder.'
-
-@callback(
-    [Output('save-fdbk', 'children'),
-     Output('click-data', 'children')],
-    Input('save-button', 'n_clicks'),
-    State('mitre-dropdown', 'value'),
-    State('mpnet-date', 'value'),
-    State('name-input', 'value'),
-    State('note-input', 'value'),
-    State('attack-chain-graph', 'clickData'),
-    prevent_initial_call=True)
-def save_json(n_clicks, tactic, date, name, note_input, clickData):
-    if (n_clicks > 0):
-        print(note_input)
-        node_id = hash_node(clickData)
-
-        if not node_id:
-            return "Error: Unable to determine node ID."
-        
-        if node_id not in data:
-            data[node_id] = {'notes': []}
-
-        data[node_id]['notes'].append({"operator":name,"tactic":tactic,"date":date,"note":note_input})
-
-        # Write back to the JSON file
-        with open('db/node_data.json', 'w') as file:
-            json.dump(data, file, indent=2)
-
-        return "Notes saved."
-    
-    return dash.no_update
- """
 
 @callback(
     [Output('save-fdbk', 'children'),
@@ -433,7 +364,7 @@ def update_webpage_callback(n_clicks, clickData, hoverData, tactic, date, name, 
     else:
         feedback = ''  # No update to feedback if the node was clicked
 
-    hoverdata = re.sub(r'<.*?>', '', clickData['points'][0].get('text', '')).replace('Notes:', '\nNotes:')
+    hoverdata = re.sub(r'<.*?>', '', clickData['points'][0].get('text', '')).replace('Notes:', '\nNotes:').replace('Found By:', '\nFound By:').replace('Attack Chain:', '\nAttack Chain:') #4 replaces chained because i cannot be fucked to find a better solution rn tbh
 
     # Build the table from current notes
     notes = data[node_id]['notes']
@@ -450,36 +381,17 @@ def update_webpage_callback(n_clicks, clickData, hoverData, tactic, date, name, 
     else:
         table_div = html.Div([hoverdata, "\n\nComments are empty. Consider hunting harder."])
 
-    return feedback, table_div
+    return feedback, [table_div, add_note_btn]
 
-""" @callback(
-    Input(),
-
+@callback(
+    Output('notes-hide', 'style'),
+    Input('show-notes-btn-1', 'n_clicks')
 )
-def node_callback():
-    pass """
-
-""" @callback(
-    Output('url', 'pathname'),  # Redirect to the same page
-    Input('save-button', 'n_clicks'),
-    prevent_initial_call=True
-)
-def reload_page(n_clicks):
-    time.sleep(2)
-    return "/"  # This triggers a page refresh """
-
-""" @callback(
-    Output('hover-data', 'children'),
-    Input('attack-chain-graph', 'hoverData')
-)
-def hoverColor(hoverData):
-    point_index = hoverData['points'][0]['pointIndex']
-    curve_number = hoverData['points'][0]['curveNumber']
-    new_fig = fig
-
-    for trace in new_fig.data:
-        trace.marker.color = list(range(6))
-        trace.market.colorscale='sunset' """
+def notes_hide(n_clicks):
+    if n_clicks % 2 == 1:
+        return {'display': 'block'}
+    else:
+        return {'display': 'none'}
 
 
 if __name__ == '__main__':

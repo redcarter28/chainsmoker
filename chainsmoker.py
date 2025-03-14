@@ -100,14 +100,19 @@ fig.update_layout(
     hovermode='closest'
 )
 
-# add dummy traces to show all relevant, possible tactics
+# copy fig to fig_list_all and add dummy traces to show all relevant, possible tactics
 fig_list_all = go.Figure(fig.to_plotly_json())
 all_tactics = [
     "Initial Access", "Execution", "Persistence", "Privilege Escalation",
     "Defense Evasion", "Credential Access", "Discovery", "Lateral Movement",
     "Collection", "C2", "Exfiltration"
 ] 
-all_tactics.reverse() # reverse because I want it top -> bottom
+visible_tactics = [t for t in all_tactics if t in set(df['MITRE Tactic'].dropna().unique())]
+
+# reverse these two because I want it top -> bottom
+visible_tactics.reverse() 
+all_tactics.reverse() 
+
 x0 = df['Date/Time MPNET'].min()
 dummy_trace = go.Scatter(
     x=[x0] * len(all_tactics),
@@ -120,6 +125,10 @@ dummy_trace = go.Scatter(
     name="Attack Chain 0"  # Invisible trace to view all mitre tactics
 )
 fig_list_all.add_trace(dummy_trace)
+
+# update category order to match the MITRE matrix, the copy doesn't preserve order it seems
+fig.update_layout(yaxis={'categoryorder': 'array', 'categoryarray': visible_tactics})
+fig_list_all.update_layout(yaxis={'categoryorder': 'array', 'categoryarray': all_tactics})
 
 name_field = html.Div(
     [   

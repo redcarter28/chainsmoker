@@ -58,34 +58,6 @@ app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY], suppress_cal
 
 fig = go.Figure()
 
-# Add Gantt chart style bars
-""" for index, row in df.iterrows():
-    fig.add_trace(go.Bar(
-        x=[row['Date/Time MPNET'], row['Date/Time MPNET']],
-        #y=[f"{row['Source Hostname/IP']} -> {row['Target Hostname/IP']}"],
-        y=df['MITRE Tactic'],
-        orientation='h',
-        name=row['Source Hostname/IP'],
-        hovertext=row['Details'],
-        marker=dict(color='rgba(0, 0, 0, 0)')  # Transparent bar for Gantt effect
-    )) """
-""" # Add scatter points for each event
-fig.add_trace(go.Scatter(
-    x=df['Date/Time MPNET'].tolist() + [None],
-    #y=[f"{source} -> {target}" for source, target in zip(df['Source Hostname/IP'], df['Target Hostname/IP'])],
-    y=df['MITRE Tactic'].tolist() + [None],
-    
-    mode='lines+markers',
-    marker=dict(
-        size=12,
-        color=list(range(10)), colorscale='sunset',
-        line=dict(width=1, color='DarkSlateGrey')
-    ),
-    line=dict(color='grey', width=2),
-    text=df['Details'],
-    hoverinfo='text'
-)) """
-
 #draw lines 
 for chain_id in df['Attack Chain'].dropna().unique():
 
@@ -112,7 +84,7 @@ for chain_id in df['Attack Chain'].dropna().unique():
     ))
 
 
-# Update layout for better display
+# update layout for better display
 fig.update_layout(
     title='Attack Chain Visualization',
     xaxis_title='Date/Time MPNET',
@@ -128,6 +100,26 @@ fig.update_layout(
     hovermode='closest'
 )
 
+# add dummy traces to show all relevant, possible tactics
+fig_list_all = go.Figure(fig.to_plotly_json())
+all_tactics = [
+    "Initial Access", "Execution", "Persistence", "Privilege Escalation",
+    "Defense Evasion", "Credential Access", "Discovery", "Lateral Movement",
+    "Collection", "C2", "Exfiltration"
+] 
+all_tactics.reverse() # reverse because I want it top -> bottom
+x0 = df['Date/Time MPNET'].min()
+dummy_trace = go.Scatter(
+    x=[x0] * len(all_tactics),
+    y=all_tactics,
+    mode='lines+markers',
+    marker=dict(color='rgba(0,0,0,0)', size=1),  # fully transparent markers
+    line=dict(color='rgba(0,0,0,0)', width=1),    # fully transparent line
+    hoverinfo='none',
+    showlegend=False,
+    name="Attack Chain 0"  # Invisible trace to view all mitre tactics
+)
+fig_list_all.add_trace(dummy_trace)
 
 name_field = html.Div(
     [   
@@ -254,6 +246,10 @@ save_note_btn = html.Div([
                 html.Pre(id='save-fdbk', style={'margin-top': '4px'})
             ], style={'text-align':'left', 'display': 'block'})
 
+toggle_list_all_btn = html.Div([
+                html.Button('Show/Hide All Tactics', id='toggle-list-all-btn', n_clicks=0, style={'padding': '6px', 'margin-top': '2px'}, className='fancy-button')
+            ], style={'text-align':'right', 'display': 'block'})
+
 # Layout of the Dash app
 app.layout = html.Div(children=[
 
@@ -267,7 +263,7 @@ app.layout = html.Div(children=[
             'Chainsmoker'
         ], className='page-title')
     ], style={'text-align': 'left', 'margin-bottom': '20px'}),
-    html.Div([]),
+    html.Div([toggle_list_all_btn], style={'padding-right': '20px'}),
     # Graph section 
     dcc.Graph(
         id='attack-chain-graph',
@@ -392,6 +388,15 @@ def notes_hide(n_clicks):
     else:
         return {'display': 'none'}
     
+@callback(
+    Output('attack-chain-graph', 'figure'),
+    Input('toggle-list-all-btn', 'n_clicks')
+)
+def toggle_list_all(n_clicks):
+    if n_clicks % 2 == 1:
+        return fig
+    else:
+        return fig_list_all
 
 if __name__ == '__main__':
     app.run_server(port=8080, host = '0.0.0.0')

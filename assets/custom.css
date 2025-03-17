@@ -121,3 +121,12 @@ background-color: #4f575c;
     width: 20%;
     min-width: 400px;
 }
+
+.fancy-border {
+    background-color: #343a40;
+    color: #f0f0f0;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 5px 5px;
+    align-items: center;
+  }

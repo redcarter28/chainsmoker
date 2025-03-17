@@ -80,7 +80,8 @@ for chain_id in df['Attack Chain'].dropna().unique():
         line=dict(color='grey', width=2),
         text=hover_text,  # Use the formatted hover text
         hoverinfo='text',
-        showlegend=False,
+        showlegend=True,
+        name= str(chain_id)
     ))
 
 
@@ -97,7 +98,9 @@ fig.update_layout(
     font=dict(color='white'),  # White font for readability
     title_font=dict(color='white'),
     margin=dict(l=50, r=50, t=50, b=50),  # Add some padding around the chart
-    hovermode='closest'
+    hovermode='closest',
+    legend_title_text='Attack Chain',
+    legend= {'itemsizing': 'constant', 'itemwidth':30}
 )
 
 # copy fig to fig_list_all and add dummy traces to show all relevant, possible tactics
@@ -124,11 +127,33 @@ dummy_trace = go.Scatter(
     showlegend=False,
     name="Attack Chain 0"  # Invisible trace to view all mitre tactics
 )
+missing_tactics = [t for t in all_tactics if t not in visible_tactics]
+
+# Dummy trace for missing tactics
+missing_trace = go.Scatter(
+    x=[x0] * 10,
+    y=missing_tactics,
+    mode='lines+markers',
+    marker=dict(color='red', size=5),  # Highlight missing ones
+    line=dict(color='red', dash='dot', width=2),
+    hoverinfo='text',
+    text=["Missing Data"] * len(missing_tactics),
+    showlegend=True,
+    name="Missing Tactics"
+)
+#fig_list_all.add_trace(missing_trace)
+
+#fig_list_all.add_hline(y=2.5, line_color="red", line_width=3, line_dash="dash")
+for t in missing_tactics:
+    fig_list_all.add_hline(y=t, line_color="indianred", line_width=25, opacity=0.2)
+
 fig_list_all.add_trace(dummy_trace)
 
 # update category order to match the MITRE matrix, the copy doesn't preserve order it seems
 fig.update_layout(yaxis={'categoryorder': 'array', 'categoryarray': visible_tactics})
 fig_list_all.update_layout(yaxis={'categoryorder': 'array', 'categoryarray': all_tactics})
+
+# html element definitions
 
 name_field = html.Div(
     [   
@@ -259,6 +284,16 @@ toggle_list_all_btn = html.Div([
                 html.Button('Show/Hide All Tactics', id='toggle-list-all-btn', n_clicks=0, style={'padding': '6px', 'margin-top': '2px'}, className='fancy-button')
             ], style={'text-align':'right', 'display': 'block'})
 
+attack_chain_unique = list(set(df['Attack Chain'].tolist()))
+chain_checklist = dcc.Checklist(
+                options=[{"label": chain, "value": chain} for chain in attack_chain_unique],
+                value=attack_chain_unique,  # Default: all selected
+                inline=True,
+                id='chain-checklist',
+                style={'text-align':'right'},
+                labelStyle={'margin-right': '10px'}
+            )
+
 # Layout of the Dash app
 app.layout = html.Div(children=[
 
@@ -272,7 +307,8 @@ app.layout = html.Div(children=[
             'Chainsmoker'
         ], className='page-title')
     ], style={'text-align': 'left', 'margin-bottom': '20px'}),
-    html.Div([toggle_list_all_btn], style={'padding-right': '20px'}),
+    html.Div([html.Div([html.Span('Select Attack Chain: ', style={'font-size':'medium','margin-left':'5px', 'margin-right':'5px'}), chain_checklist], className='fancy-border', style={'display':'flex'}), toggle_list_all_btn], style={'display': 'flex', 'align-items': 'stretch', 'gap': '10px', 'justify-content': 'flex-end', 'padding-right': '20px'}),
+    
     # Graph section 
     dcc.Graph(
         id='attack-chain-graph',

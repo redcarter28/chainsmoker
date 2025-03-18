@@ -1,4 +1,6 @@
 import dash
+import flask
+import openpyxl
 from dash import dcc, html, callback, Input, Output, State, dash_table
 import json
 import dash_bootstrap_components as dbc
@@ -9,7 +11,6 @@ import hashlib
 import os 
 import re
 
-#html bootstrap
 styles = {
     'pre': {
         'border': 'thin lightgrey solid',
@@ -20,7 +21,9 @@ styles = {
 # Read data from Excel file using openpyxl
 df = pd.read_excel('data/data2.xlsx', engine='openpyxl')
 
-# Define a custom date parsing function to handle the specific format
+#writer = pd.ExcelWriter('data/data2.xlsx', engine='openpyxl')
+
+# handle dates
 def custom_date_parser(date_str):
     return pd.to_datetime(date_str, format='%m/%d/%Y, %H%M')
 
@@ -57,101 +60,93 @@ else:
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY], suppress_callback_exceptions=True)
 
 fig = go.Figure()
+fig_list_all = None
+all_tactics = None
+visible_tactics = None
+missing_tactics = None
 
-#draw lines 
-for chain_id in df['Attack Chain'].dropna().unique():
+# main chainsmoker algo 
+def chainsmoker():
+    for chain_id in df['Attack Chain'].dropna().unique():
 
-    chain_df = df[df['Attack Chain'] == chain_id]
+        chain_df = df[df['Attack Chain'] == chain_id]
 
-    # Create a list of formatted strings combining 'Details' and 'Notes' for each point
-    hover_text = [f"<b>Details:</b> {details} <br><b>Notes:</b> {notes}<br><b>Found By:</b> {operator} <br><b>Attack Chain:</b> {att}" for details, notes, operator, att in zip(chain_df['Details'], chain_df['Notes'], chain_df['Operator'], chain_df['Attack Chain'])]
+        # Create a list of formatted strings combining 'Details' and 'Notes' for each point
+        hover_text = [f"<b>Details:</b> {details} <br><b>Notes:</b> {notes}<br><b>Found By:</b> {operator} <br><b>Attack Chain:</b> {att}" for details, notes, operator, att in zip(chain_df['Details'], chain_df['Notes'], chain_df['Operator'], chain_df['Attack Chain'])]
 
-    fig.add_trace(go.Scatter(
-        x=chain_df['Date/Time MPNET'].tolist() + [None],
-        y=chain_df['MITRE Tactic'].tolist() + [None],
+        fig.add_trace(go.Scatter(
+            x=chain_df['Date/Time MPNET'].tolist() + [None],
+            y=chain_df['MITRE Tactic'].tolist() + [None],
+            mode='lines+markers',
+            marker=dict(
+                size=12,
+                opacity=0.8,
+                color=list(range(len(chain_df))),  # Adjusting color range to match the length of chain_df
+                colorscale='sunset',
+                line=dict(width=1, color='DarkSlateGrey')
+            ),
+            line=dict(color='grey', width=2),
+            text=hover_text,  # Use the formatted hover text
+            hoverinfo='text',
+            showlegend=True,
+            name= str(chain_id)
+        ))
+
+
+    # update layout for better display
+    fig.update_layout(
+        title='Attack Chain Visualization',
+        xaxis_title='Date/Time MPNET',
+        yaxis_title='MITRE Tactic',
+        barmode='overlay',
+        xaxis=dict(type='date', gridcolor='rgba(255, 255, 255, 0.2)'),  # Light gridlines
+        yaxis=dict(gridcolor='rgba(255, 255, 255, 0.2)'),
+        plot_bgcolor='rgba(35, 35, 35, 1)',  # Dark background
+        paper_bgcolor='rgba(35, 35, 35, 1)',  # Dark background
+        font=dict(color='white'),  # White font for readability
+        title_font=dict(color='white'),
+        margin=dict(l=50, r=50, t=50, b=50),  # Add some padding around the chart
+        hovermode='closest',
+        legend_title_text='Attack Chain',
+        legend= {'itemsizing': 'constant', 'itemwidth':30}
+    )
+
+    # copy fig to fig_list_all and add dummy traces to show all relevant, possible tactics
+    fig_list_all = go.Figure(fig.to_plotly_json())
+    all_tactics = [
+        "Initial Access", "Execution", "Persistence", "Privilege Escalation",
+        "Defense Evasion", "Credential Access", "Discovery", "Lateral Movement",
+        "Collection", "C2", "Exfiltration"
+    ] 
+    visible_tactics = [t for t in all_tactics if t in set(df['MITRE Tactic'].dropna().unique())]
+
+    # reverse these two because I want it top -> bottom
+    visible_tactics.reverse() 
+    all_tactics.reverse() 
+
+    x0 = df['Date/Time MPNET'].min()
+    dummy_trace = go.Scatter(
+        x=[x0] * len(all_tactics),
+        y=all_tactics,
         mode='lines+markers',
-        marker=dict(
-            size=12,
-            opacity=0.8,
-            color=list(range(len(chain_df))),  # Adjusting color range to match the length of chain_df
-            colorscale='sunset',
-            line=dict(width=1, color='DarkSlateGrey')
-        ),
-        line=dict(color='grey', width=2),
-        text=hover_text,  # Use the formatted hover text
-        hoverinfo='text',
-        showlegend=True,
-        name= str(chain_id)
-    ))
+        marker=dict(color='rgba(0,0,0,0)', size=1),  # fully transparent markers
+        line=dict(color='rgba(0,0,0,0)', width=1),    # fully transparent line
+        hoverinfo='none',
+        showlegend=False,
+        name="Attack Chain 0"  # Invisible trace to view all mitre tactics
+    )
+    missing_tactics = [t for t in all_tactics if t not in visible_tactics]
 
+    for t in missing_tactics:
+        fig_list_all.add_hline(y=t, line_color="indianred", line_width=25, opacity=0.2)
 
-# update layout for better display
-fig.update_layout(
-    title='Attack Chain Visualization',
-    xaxis_title='Date/Time MPNET',
-    yaxis_title='MITRE Tactic',
-    barmode='overlay',
-    xaxis=dict(type='date', gridcolor='rgba(255, 255, 255, 0.2)'),  # Light gridlines
-    yaxis=dict(gridcolor='rgba(255, 255, 255, 0.2)'),
-    plot_bgcolor='rgba(35, 35, 35, 1)',  # Dark background
-    paper_bgcolor='rgba(35, 35, 35, 1)',  # Dark background
-    font=dict(color='white'),  # White font for readability
-    title_font=dict(color='white'),
-    margin=dict(l=50, r=50, t=50, b=50),  # Add some padding around the chart
-    hovermode='closest',
-    legend_title_text='Attack Chain',
-    legend= {'itemsizing': 'constant', 'itemwidth':30}
-)
+    fig_list_all.add_trace(dummy_trace)
 
-# copy fig to fig_list_all and add dummy traces to show all relevant, possible tactics
-fig_list_all = go.Figure(fig.to_plotly_json())
-all_tactics = [
-    "Initial Access", "Execution", "Persistence", "Privilege Escalation",
-    "Defense Evasion", "Credential Access", "Discovery", "Lateral Movement",
-    "Collection", "C2", "Exfiltration"
-] 
-visible_tactics = [t for t in all_tactics if t in set(df['MITRE Tactic'].dropna().unique())]
+    # update category order to match the MITRE matrix, the copy doesn't preserve order it seems
+    fig.update_layout(yaxis={'categoryorder': 'array', 'categoryarray': visible_tactics})
+    fig_list_all.update_layout(yaxis={'categoryorder': 'array', 'categoryarray': all_tactics})
 
-# reverse these two because I want it top -> bottom
-visible_tactics.reverse() 
-all_tactics.reverse() 
-
-x0 = df['Date/Time MPNET'].min()
-dummy_trace = go.Scatter(
-    x=[x0] * len(all_tactics),
-    y=all_tactics,
-    mode='lines+markers',
-    marker=dict(color='rgba(0,0,0,0)', size=1),  # fully transparent markers
-    line=dict(color='rgba(0,0,0,0)', width=1),    # fully transparent line
-    hoverinfo='none',
-    showlegend=False,
-    name="Attack Chain 0"  # Invisible trace to view all mitre tactics
-)
-missing_tactics = [t for t in all_tactics if t not in visible_tactics]
-
-# Dummy trace for missing tactics
-missing_trace = go.Scatter(
-    x=[x0] * 10,
-    y=missing_tactics,
-    mode='lines+markers',
-    marker=dict(color='red', size=5),  # Highlight missing ones
-    line=dict(color='red', dash='dot', width=2),
-    hoverinfo='text',
-    text=["Missing Data"] * len(missing_tactics),
-    showlegend=True,
-    name="Missing Tactics"
-)
-#fig_list_all.add_trace(missing_trace)
-
-#fig_list_all.add_hline(y=2.5, line_color="red", line_width=3, line_dash="dash")
-for t in missing_tactics:
-    fig_list_all.add_hline(y=t, line_color="indianred", line_width=25, opacity=0.2)
-
-fig_list_all.add_trace(dummy_trace)
-
-# update category order to match the MITRE matrix, the copy doesn't preserve order it seems
-fig.update_layout(yaxis={'categoryorder': 'array', 'categoryarray': visible_tactics})
-fig_list_all.update_layout(yaxis={'categoryorder': 'array', 'categoryarray': all_tactics})
+    return fig, fig_list_all
 
 # html element definitions
 
@@ -281,8 +276,8 @@ save_note_btn = html.Div([
             ], style={'text-align':'left', 'display': 'block'})
 
 toggle_list_all_btn = html.Div([
-                html.Button('Show/Hide All Tactics', id='toggle-list-all-btn', n_clicks=0, style={'padding': '6px', 'margin-top': '2px'}, className='fancy-button')
-            ], style={'text-align':'right', 'display': 'block'})
+                html.Button('Hide Missing Tactics', id='toggle-list-all-btn', n_clicks=0, style={'padding': '6px', 'margin-top': '2px'}, className='fancy-button')
+            ], style={'text-align':'right', 'display': 'block', 'max-width': '170px'})
 
 attack_chain_unique = list(set(df['Attack Chain'].tolist()))
 chain_checklist = dcc.Checklist(
@@ -299,6 +294,7 @@ app.layout = html.Div(children=[
 
     dcc.Location(id='url', refresh=True),
     dcc.Store(id='plot-data', data=fig.to_plotly_json()),
+    dcc.Store(id='zoom-state', storage_type='memory'),
 
     # Header section with the logo and title
     html.Div([
@@ -307,7 +303,7 @@ app.layout = html.Div(children=[
             'Chainsmoker'
         ], className='page-title')
     ], style={'text-align': 'left', 'margin-bottom': '20px'}),
-    html.Div([html.Div([html.Span('Select Attack Chain: ', style={'font-size':'medium','margin-left':'5px', 'margin-right':'5px'}), chain_checklist], className='fancy-border', style={'display':'flex'}), toggle_list_all_btn], style={'display': 'flex', 'align-items': 'stretch', 'gap': '10px', 'justify-content': 'flex-end', 'padding-right': '20px'}),
+    html.Div([html.Div([html.Span('Select Attack Chain: ', style={'font-size':'medium','margin-left':'5px', 'margin-right':'5px'}), chain_checklist], className='fancy-border', style={'display':'none'}), toggle_list_all_btn], style={'display': 'flex', 'align-items': 'stretch', 'gap': '10px', 'justify-content': 'flex-end', 'padding-right': '20px'}),
     
     # Graph section 
     dcc.Graph(
@@ -320,7 +316,7 @@ app.layout = html.Div(children=[
     # Node data and note input section
     html.Div([
         dcc.Markdown("** Node Data:** "),
-        html.Pre(id='click-data', style={'margin-left': '0px'}),
+        html.Pre('Click on a node to retrieve data',id='click-data', style={'margin-left': '0px'}, className='fancy-border'),
         html.Div([  
             form,
             dcc.Textarea(
@@ -330,7 +326,7 @@ app.layout = html.Div(children=[
                 className='text-box'
             ),
             save_note_btn,
-        ], id='notes-hide', style={'display': 'block'}),
+        ], id='notes-hide', style={'display': 'none'}),
         
         html.Div([
             node_form,
@@ -361,6 +357,9 @@ def hash_node(clickData):
 def hash_record():
     pass
 
+
+# APP CALLBACKS 
+
 @callback(
     [Output('save-fdbk', 'children'),
      Output('click-data', 'children')],
@@ -372,7 +371,7 @@ def hash_record():
      State('note-input', 'value')],
     prevent_initial_call=True
 )
-def update_webpage_callback(n_clicks, clickData, tactic, date, name, note_input):
+def notes_clickdata(n_clicks, clickData, tactic, date, name, note_input):
     ctx = dash.callback_context
     if not ctx.triggered:
         triggered_id = None
@@ -433,15 +432,66 @@ def notes_hide(n_clicks):
     else:
         return {'display': 'none'}
     
+# merged callback for updating of button label/logic and zoom state
 @callback(
-    Output('attack-chain-graph', 'figure'),
-    Input('toggle-list-all-btn', 'n_clicks')
+    [Output('attack-chain-graph', 'figure'),
+     Output('toggle-list-all-btn', 'children')],
+    [Input('toggle-list-all-btn', 'n_clicks'),
+     Input('zoom-state', 'data')],
+     prevent_initial_call = True
 )
-def toggle_list_all(n_clicks):
+def update_graph(n_clicks, zoom_state):
+    """Unified callback to update the attack chain graph based on button clicks and zoom state."""
+    print(zoom_state)
+    # Default zoom values
+    zoom_xaxis = None
+    zoom_yaxis = None
+    
+    # Extract zoom state if available
+    if zoom_state:
+        zoom_xaxis = zoom_state.get('xaxis_range', None)
+        zoom_yaxis = zoom_state.get('yaxis_range', None)
+
+    # Toggle between two figures based on button clicks
     if n_clicks % 2 == 1:
-        return fig
+        selected_fig = fig
+        button_label = 'Show Missing Tactics'
     else:
-        return fig_list_all
+        selected_fig = fig_list_all
+        button_label = 'Hide Missing Tactics'
+
+    # Apply zoom settings if available
+    if zoom_xaxis and zoom_yaxis:
+        selected_fig.update_layout(
+            xaxis=dict(range=zoom_xaxis),
+            yaxis=dict(range=zoom_yaxis)
+        )
+
+    return selected_fig, button_label
+
+
+@callback(
+    [Output('save-fdbk-node', 'children')],
+    Input('save-button-node', 'n_clicks'),
+    prevent_initial_call = True
+)
+def save_node(n_clicks):
+    if n_clicks % 2 == 0:
+        return [html.Pre('yes')]
+    return [html.Pre('no')]
+
+@callback(
+    Output('zoom-state', 'data'),
+    Input('attack-chain-graph', 'relayoutData'),
+    prevent_initial_call = True  
+)
+def store_zoom_state(relayoutData):
+    
+    return relayoutData
+
+
+
 
 if __name__ == '__main__':
+    fig, fig_list_all = chainsmoker() # initial call
     app.run_server(port=8080, host = '0.0.0.0')

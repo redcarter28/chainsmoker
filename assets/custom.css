@@ -104,12 +104,17 @@ input[type="text"], textarea, .dash-input, .dash-textarea {
 }
 
 .fancy-button {
-    background-color: #343a40;
+    background-color: #464b50;
     color: #f0f0f0;
     border: 1px solid #555;
     border-radius: 4px;
     padding: 10px 20px;
     transition: transform 0.1s ease-in-out, background-color 0.2s ease;
+  }
+
+button.fancy-button {
+    background-color: #464b50;
+    border: 1px solid #6e6e6e;
   }
   
 .fancy-button:hover {
@@ -130,3 +135,13 @@ background-color: #4f575c;
     padding: 5px 5px;
     align-items: center;
   }
+
+pre.fancy-border {
+    background-color: #343a40;
+    color: #f0f0f0;
+    border: 1px solid #555; 
+    border-radius: 4px; 
+    padding: 12px; 
+    white-space: pre-wrap; 
+    word-wrap: break-word; 
+}

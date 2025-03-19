@@ -1,4 +1,6 @@
 pandas
+openpyxl
+flask
 dash
 dash_bootstrap_components
 plotly

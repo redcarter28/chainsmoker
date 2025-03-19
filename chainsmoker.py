@@ -146,7 +146,7 @@ def chainsmoker():
     fig.update_layout(yaxis={'categoryorder': 'array', 'categoryarray': visible_tactics})
     fig_list_all.update_layout(yaxis={'categoryorder': 'array', 'categoryarray': all_tactics})
 
-    return fig, fig_list_all
+    return fig, fig_list_all, missing_tactics
 
 # html element definitions
 
@@ -432,43 +432,6 @@ def notes_hide(n_clicks):
     else:
         return {'display': 'none'}
     
-# merged callback for updating of button label/logic and zoom state
-@callback(
-    [Output('attack-chain-graph', 'figure'),
-     Output('toggle-list-all-btn', 'children')],
-    [Input('toggle-list-all-btn', 'n_clicks'),
-     Input('zoom-state', 'data')],
-     prevent_initial_call = True
-)
-def update_graph(n_clicks, zoom_state):
-    """Unified callback to update the attack chain graph based on button clicks and zoom state."""
-    print(zoom_state)
-    # Default zoom values
-    zoom_xaxis = None
-    zoom_yaxis = None
-    
-    # Extract zoom state if available
-    if zoom_state:
-        zoom_xaxis = zoom_state.get('xaxis_range', None)
-        zoom_yaxis = zoom_state.get('yaxis_range', None)
-
-    # Toggle between two figures based on button clicks
-    if n_clicks % 2 == 1:
-        selected_fig = fig
-        button_label = 'Show Missing Tactics'
-    else:
-        selected_fig = fig_list_all
-        button_label = 'Hide Missing Tactics'
-
-    # Apply zoom settings if available
-    if zoom_xaxis and zoom_yaxis:
-        selected_fig.update_layout(
-            xaxis=dict(range=zoom_xaxis),
-            yaxis=dict(range=zoom_yaxis)
-        )
-
-    return selected_fig, button_label
-
 
 @callback(
     [Output('save-fdbk-node', 'children')],
@@ -480,18 +443,103 @@ def save_node(n_clicks):
         return [html.Pre('yes')]
     return [html.Pre('no')]
 
+import plotly.graph_objects as go
+
 @callback(
     Output('zoom-state', 'data'),
     Input('attack-chain-graph', 'relayoutData'),
-    prevent_initial_call = True  
+    prevent_initial_call=True
 )
 def store_zoom_state(relayoutData):
+    # Check if the relayoutData indicates a reset (autorange)
+    if relayoutData is None or 'xaxis.autorange' in relayoutData or 'yaxis.autorange' in relayoutData:
+        return None  # Clear the zoom state
+
+    # Only store zoom-related data
+    zoom_data = {}
+    if 'xaxis.range[0]' in relayoutData:
+        zoom_data['xaxis.range[0]'] = relayoutData['xaxis.range[0]']
+        zoom_data['xaxis.range[1]'] = relayoutData['xaxis.range[1]']
+    if 'yaxis.range[0]' in relayoutData:
+        zoom_data['yaxis.range[0]'] = relayoutData['yaxis.range[0]']
+        zoom_data['yaxis.range[1]'] = relayoutData['yaxis.range[1]']
     
-    return relayoutData
+    return zoom_data if zoom_data else None
+
+
+@callback(
+    [Output('attack-chain-graph', 'figure'),
+     Output('toggle-list-all-btn', 'children')],
+    [Input('toggle-list-all-btn', 'n_clicks'),
+     Input('zoom-state', 'data')],
+    prevent_initial_call=True
+)
+def update_graph(n_clicks, zoom_state):
+    os.system('cls')
+    zoom_xaxis = [None, None]
+    zoom_yaxis = [None, None]
+
+    if zoom_state:
+        zoom_xaxis = [
+            zoom_state.get('xaxis.range[0]'), 
+            zoom_state.get('xaxis.range[1]')
+        ]
+        zoom_yaxis = [
+            zoom_state.get('yaxis.range[0]'), 
+            zoom_state.get('yaxis.range[1]')
+        ]
+
+    
+
+    if n_clicks % 2 == 1: # logic to handle button clicks
+
+        # logic to manage zoom settings when switching between plots of different sizes, 
+        # which may occur due to varying numbers of visible tactics.
+        if(zoom_state):
+            zoom_yaxis[1] = zoom_yaxis[1] - len(missing_tactics)
+
+        selected_fig = go.Figure(fig)  
+        button_label = 'Show Missing Tactics'
+    else:
+        
+        selected_fig = go.Figure(fig_list_all) 
+        button_label = 'Hide Missing Tactics'
+
+    print(button_label)
+    print("Zoom X:" + str(zoom_xaxis))
+    print("Zoom Y:" + str(zoom_yaxis))
+
+    if zoom_xaxis[0] is not None and zoom_xaxis[1] is not None and \
+       zoom_yaxis[0] is not None and zoom_yaxis[1] is not None:
+        selected_fig.update_layout(
+            xaxis=dict(range=zoom_xaxis),
+            yaxis=dict(range=zoom_yaxis)
+        )
+
+    return selected_fig, button_label
+
+
+# utility methods
+
+def map_value(value, in_min, in_max, out_min, out_max): # UNUSED
+    """
+    Maps a value from one range to another.
+    Args:
+        value: The input value to be mapped.
+        in_min: The minimum value of the input range.
+        in_max: The maximum value of the input range.
+        out_min: The minimum value of the output range.
+        out_max: The maximum value of the output range.
+
+    Returns:
+        The mapped value within the output range.
+    """
+    return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
+
 
 
 
 
 if __name__ == '__main__':
-    fig, fig_list_all = chainsmoker() # initial call
+    fig, fig_list_all, missing_tactics = chainsmoker() # initial call
     app.run_server(port=8080, host = '0.0.0.0')

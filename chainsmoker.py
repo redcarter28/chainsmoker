@@ -1,6 +1,7 @@
 import dash
 import flask
 import openpyxl
+from openpyxl import load_workbook
 from dash import dcc, html, callback, Input, Output, State, dash_table
 import json
 import dash_bootstrap_components as dbc
@@ -21,7 +22,10 @@ styles = {
 # Read data from Excel file using openpyxl
 df = pd.read_excel('data/data2.xlsx', engine='openpyxl')
 
-#writer = pd.ExcelWriter('data/data2.xlsx', engine='openpyxl')
+""" book = load_workbook('data/target.xlsx')
+writer = pd.ExcelWriter('data/target.xlsx', engine='openpyxl', mode='a', if_sheet_exists='overlay')
+writer.book = book
+writer.sheets = {ws.title: ws for ws in book.worksheets} """
 
 # handle dates
 def custom_date_parser(date_str):
@@ -262,7 +266,8 @@ node_form = html.Div(
                 className='InputField',  
             )
         ], 
-        style={'padding': '4px'})
+        style={'padding': '4px'},
+        id='node-form')
 )
 
 add_note_btn = html.Div([
@@ -431,19 +436,55 @@ def notes_hide(n_clicks):
         return {'display': 'block'}
     else:
         return {'display': 'none'}
-    
 
 @callback(
     [Output('save-fdbk-node', 'children')],
     Input('save-button-node', 'n_clicks'),
-    prevent_initial_call = True
+    [State('mpnet-date-input-node', 'value'),
+     State('mitre-dropdown-node', 'value'),
+     State('src-ip-node', 'value'),
+     State('dst-ip-node', 'value'),
+     State('details-input-node', 'value'),
+     State('notes-input-node', 'value'),
+     State('name-input-node', 'value'),
+     State('atk-chn-input-node', 'value')],
+    prevent_initial_call=True
 )
-def save_node(n_clicks):
-    if n_clicks % 2 == 0:
-        return [html.Pre('yes')]
-    return [html.Pre('no')]
+def save_node(n_clicks, date, tactic, src, dst, details, notes, name, chain):
+    if n_clicks > 0:
 
-import plotly.graph_objects as go
+        # logic to regex enforce time/date format
+        if(not re.match(r"\d{2}/\d{2}/\d{4}, \d{4}$", date)):
+            return [html.Pre('Error: Incorrect time/date format', style={'font-size': 'medium', 'color':'indianred'})]
+
+        new_data = pd.DataFrame([{
+            'Date/Time MPNET': date,
+            'MITRE Tactic': tactic,
+            'Source Hostname/IP': src,
+            'Target Hostname/IP': dst,
+            'Details': details,
+            'Notes': notes,
+            'Operator': name,
+            'Attack Chain': chain
+        }])
+        
+        global df  
+    
+        try:
+            df['Date/Time MPNET'] = pd.to_datetime(df['Date/Time MPNET'], format='%m/%d/%Y, %H%M', errors='coerce')
+        except Exception as e:
+            print(f"Date conversion error: {e}")
+        
+        df['Date/Time MPNET'] = df['Date/Time MPNET'].apply(lambda x: x.strftime('%m/%d/%Y, %H%M') if not pd.isnull(x) else '')
+
+        df = pd.concat([df, new_data], ignore_index=True)
+        
+        with get_excel_writer('data/target.xlsx') as writer:
+            df.to_excel(writer, index=False, header=True, sheet_name='Sheet1')
+        
+        return [html.Pre('Node Saved!', style={'font-size': 'medium'})]
+
+    return dash.no_update
 
 @callback(
     Output('zoom-state', 'data'),
@@ -465,7 +506,6 @@ def store_zoom_state(relayoutData):
         zoom_data['yaxis.range[1]'] = relayoutData['yaxis.range[1]']
     
     return zoom_data if zoom_data else None
-
 
 @callback(
     [Output('attack-chain-graph', 'figure'),
@@ -518,7 +558,6 @@ def update_graph(n_clicks, zoom_state):
 
     return selected_fig, button_label
 
-
 # utility methods
 
 def map_value(value, in_min, in_max, out_min, out_max): # UNUSED
@@ -536,9 +575,9 @@ def map_value(value, in_min, in_max, out_min, out_max): # UNUSED
     """
     return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
+def get_excel_writer(file_path):
 
-
-
+    return pd.ExcelWriter(file_path, engine='openpyxl', mode='a', if_sheet_exists='overlay')
 
 if __name__ == '__main__':
     fig, fig_list_all, missing_tactics = chainsmoker() # initial call

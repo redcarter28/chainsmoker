@@ -68,6 +68,7 @@ fig_list_all = None
 all_tactics = None
 visible_tactics = None
 missing_tactics = None
+selected_fig = None
 
 # main chainsmoker algo 
 def chainsmoker():
@@ -298,7 +299,7 @@ chain_checklist = dcc.Checklist(
 app.layout = html.Div(children=[
 
     dcc.Location(id='url', refresh=True),
-    dcc.Store(id='plot-data', data=fig.to_plotly_json()),
+    dcc.Store(id='fig-store'),
     dcc.Store(id='zoom-state', storage_type='memory'),
 
     # Header section with the logo and title
@@ -438,7 +439,8 @@ def notes_hide(n_clicks):
         return {'display': 'none'}
 
 @callback(
-    [Output('save-fdbk-node', 'children')],
+    [Output('save-fdbk-node', 'children'),
+     Output('fig-store', 'data')],
     Input('save-button-node', 'n_clicks'),
     [State('mpnet-date-input-node', 'value'),
      State('mitre-dropdown-node', 'value'),
@@ -448,14 +450,18 @@ def notes_hide(n_clicks):
      State('notes-input-node', 'value'),
      State('name-input-node', 'value'),
      State('atk-chn-input-node', 'value')],
-    prevent_initial_call=True
+    prevent_initial_call=True,
+    allow_duplicate=True
 )
 def save_node(n_clicks, date, tactic, src, dst, details, notes, name, chain):
     if n_clicks > 0:
 
+        if(date is None):
+            return [html.Pre('Error: Please fill out all fields', style={'font-size': 'medium', 'color':'indianred'})], dash.no_update
+        
         # logic to regex enforce time/date format
         if(not re.match(r"\d{2}/\d{2}/\d{4}, \d{4}$", date)):
-            return [html.Pre('Error: Incorrect time/date format', style={'font-size': 'medium', 'color':'indianred'})]
+            return [html.Pre('Error: Incorrect time/date format', style={'font-size': 'medium', 'color':'indianred'})], dash.no_update
 
         new_data = pd.DataFrame([{
             'Date/Time MPNET': date,
@@ -479,12 +485,17 @@ def save_node(n_clicks, date, tactic, src, dst, details, notes, name, chain):
 
         df = pd.concat([df, new_data], ignore_index=True)
         
-        with get_excel_writer('data/target.xlsx') as writer:
+        with get_excel_writer('data/data2.xlsx') as writer:
             df.to_excel(writer, index=False, header=True, sheet_name='Sheet1')
-        
-        return [html.Pre('Node Saved!', style={'font-size': 'medium'})]
 
-    return dash.no_update
+        global fig, fig_list_all, missing_tactics 
+        fig, fig_list_all, missing_tactics = chainsmoker() # regen the dfs for plotly
+
+        
+        return [html.Pre('Node Saved!', style={'font-size': 'medium'})], fig.to_dict()
+
+
+    return dash.no_update, dash.no_update
 
 @callback(
     Output('zoom-state', 'data'),
@@ -508,14 +519,30 @@ def store_zoom_state(relayoutData):
     return zoom_data if zoom_data else None
 
 @callback(
-    [Output('attack-chain-graph', 'figure'),
+    Output('attack-chain-graph', 'figure'),
+    Input('fig-store', 'data'),
+    prevent_initial_call=True
+)
+def update_graph(fig_data):
+    if fig_data is None:
+        raise dash.exceptions.PreventUpdate
+
+    fig = go.Figure(fig_data)
+
+    return fig
+
+"""global fig, fig_list_all, missing_tactics
+fig, fig_list_all, missing_tactics = chainsmoker()"""
+
+
+@callback(
+    [Output('fig-store', 'data', allow_duplicate=True),
      Output('toggle-list-all-btn', 'children')],
     [Input('toggle-list-all-btn', 'n_clicks'),
      Input('zoom-state', 'data')],
     prevent_initial_call=True
 )
-def update_graph(n_clicks, zoom_state):
-    os.system('cls')
+def toggle_graph_view(n_clicks, zoom_state):
     zoom_xaxis = [None, None]
     zoom_yaxis = [None, None]
 
@@ -529,25 +556,16 @@ def update_graph(n_clicks, zoom_state):
             zoom_state.get('yaxis.range[1]')
         ]
 
-    
-
-    if n_clicks % 2 == 1: # logic to handle button clicks
-
-        # logic to manage zoom settings when switching between plots of different sizes, 
-        # which may occur due to varying numbers of visible tactics.
-        if(zoom_state):
+    if n_clicks % 2 == 1:
+        if zoom_state:
             zoom_yaxis[1] = zoom_yaxis[1] - len(missing_tactics)
 
+        global selected_fig
         selected_fig = go.Figure(fig)  
         button_label = 'Show Missing Tactics'
     else:
-        
         selected_fig = go.Figure(fig_list_all) 
         button_label = 'Hide Missing Tactics'
-
-    print(button_label)
-    print("Zoom X:" + str(zoom_xaxis))
-    print("Zoom Y:" + str(zoom_yaxis))
 
     if zoom_xaxis[0] is not None and zoom_xaxis[1] is not None and \
        zoom_yaxis[0] is not None and zoom_yaxis[1] is not None:
@@ -556,7 +574,8 @@ def update_graph(n_clicks, zoom_state):
             yaxis=dict(range=zoom_yaxis)
         )
 
-    return selected_fig, button_label
+    # Return the figure data to the store
+    return selected_fig.to_dict(), button_label
 
 # utility methods
 

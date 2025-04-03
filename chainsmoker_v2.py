@@ -118,8 +118,12 @@ def create_chain_trace(chain_df, chain_id):
 
 # main chainsmoker algo 
 def chainsmoker():
+
+    df['Date/Time MPNET'] = df['Date/Time MPNET'].apply(custom_date_parser)
+
     global fig
     fig = go.Figure()  # Clear existing figure
+    
 
     # Process each attack chain
     for chain_id in df['Attack Chain'].dropna().unique():
@@ -139,7 +143,7 @@ def chainsmoker():
     fig_list_all = go.Figure(fig.to_plotly_json())
     
     # Add missing tactics visualization
-    df['Date/Time MPNET'] = df['Date/Time MPNET'].apply(custom_date_parser)
+    
     x0 = df['Date/Time MPNET'].min()
     missing_tactics = [t for t in all_tactics if t not in visible_tactics]
     
@@ -460,6 +464,7 @@ def notes_hide(n_clicks):
     prevent_initial_call=True
 )
 def save_node(n_clicks, date, tactic, src, dst, details, notes, name, chain, existing_fig_data):
+    
     if not n_clicks:
         return dash.no_update, dash.no_update
 
@@ -485,11 +490,19 @@ def save_node(n_clicks, date, tactic, src, dst, details, notes, name, chain, exi
     }])
     
     global df
+    print(df)
+    df['Date/Time MPNET'] = df['Date/Time MPNET'].apply(custom_date_parser)
     df = pd.concat([df, new_data], ignore_index=True)
+
+    print(df)
     
     # Save to Excel
+    df['Date/Time MPNET'] = pd.to_datetime(df['Date/Time MPNET'], format='%m/%d/%Y, %H%M', errors='coerce')
+    df['Date/Time MPNET'] = df['Date/Time MPNET'].dt.strftime('%m/%d/%Y, %H%M')
     with get_excel_writer('data/data2.xlsx') as writer:
         df.to_excel(writer, index=False, header=True, sheet_name='Sheet1')
+
+    print(pd.read_excel('data/data2.xlsx', engine='openpyxl'))
 
     # Update figures
     global fig, fig_list_all, missing_tactics
@@ -532,6 +545,7 @@ def update_graph(fig_data):
     prevent_initial_call=True
 )
 def toggle_graph_view(n_clicks, zoom_state):
+    n_clicks = 0 if n_clicks is None else n_clicks  # Convert None to 0
     if not n_clicks:
         return dash.no_update, dash.no_update
 

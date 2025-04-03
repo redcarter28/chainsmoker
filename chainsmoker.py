@@ -527,9 +527,9 @@ def update_graph(fig_data):
     if fig_data is None:
         raise dash.exceptions.PreventUpdate
 
-    fig = go.Figure(fig_data)
+    fig2 = go.Figure(fig_data)
 
-    return fig
+    return fig2
 
 """global fig, fig_list_all, missing_tactics
 fig, fig_list_all, missing_tactics = chainsmoker()"""

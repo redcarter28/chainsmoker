@@ -281,7 +281,7 @@ save_note_btn = html.Div([
 ], style={'text-align':'left', 'display': 'block'})
 
 toggle_list_all_btn = html.Div([
-    html.Button('Hide Missing Tactics', id='toggle-list-all-btn', n_clicks=0, 
+    html.Button('Hide Missing Tactics', id='toggle-list-all-btn', n_clicks=2, 
                 style={'padding': '6px', 'margin-top': '2px'}, 
                 className='fancy-button')
 ], style={'text-align':'right', 'display': 'block', 'max-width': '170px'})
@@ -311,7 +311,7 @@ app.layout = html.Div(children=[
                     style={'display':'inline', 'width':'96px', 'height':'96px', 'padding':'12px'}),
             'Chainsmoker'
         ], className='page-title')
-    ], style={'text-align': 'left', 'margin-bottom': '20px'}),
+    ], style={'text-align': 'left', 'margin-bottom': '2px'}),
 
     # Controls section
     html.Div([
@@ -325,12 +325,34 @@ app.layout = html.Div(children=[
               'justify-content': 'flex-end', 'padding-right': '20px'}),
     
     # Graph section 
-    dcc.Graph(
-        id='attack-chain-graph',
-        figure=fig,
-        className='fig',
-        style={'margin': '12px'}
-    ),
+   dcc.Graph(
+    id='attack-chain-graph',
+    figure=fig,
+    className='fig',
+    style={'margin': '12px'},
+    config={
+        'scrollZoom': True,  # Enable scroll zoom for timeline navigation
+        'displaylogo': False,  # Remove the plotly logo
+        'modeBarButtonsToRemove': ['autoScale2d', 'select2d', 'lasso2d'],  # Remove unnecessary buttons
+        'displayModeBar': 'hover',  # Only show mode bar on hover
+        'doubleClick': 'reset+autosize',  # Double click resets view
+        'showAxisDragHandles': True,  # Keep drag handles for easy navigation
+        'showAxisRangeEntryBoxes': True,  # Allow manual range entry
+        'showTips': True,  # Show interaction tips
+        'responsive': False,  # Make the graph responsive to window size
+        'editable': False,  # Prevent accidental edits
+        'autosizable': True,  # Allow auto-sizing
+        'doubleClickDelay': 0,  # Standard double-click delay
+        'toImageButtonOptions': {  # Configure image export
+            'format': 'png',
+            'filename': 'attack_chain',
+            'height': None,
+            'width': None,
+            'scale': 2
+        }
+    }
+
+),
     html.Div(id='hover-data', style={'margin-left': '0px'}),
 
     # Node data and input section
@@ -525,7 +547,7 @@ def store_zoom_state(relayoutData):
             zoom_data[f'{axis}.range[0]'] = relayoutData[f'{axis}.range[0]']
             zoom_data[f'{axis}.range[1]'] = relayoutData[f'{axis}.range[1]']
     
-    return zoom_data if zoom_data else None
+    return zoom_data if zoom_data else None 
 
 @callback(
     Output('attack-chain-graph', 'figure'),
@@ -545,6 +567,7 @@ def update_graph(fig_data):
     prevent_initial_call=True
 )
 def toggle_graph_view(n_clicks, zoom_state):
+    print(n_clicks)
     n_clicks = 0 if n_clicks is None else n_clicks  # Convert None to 0
     if not n_clicks:
         return dash.no_update, dash.no_update
@@ -560,10 +583,14 @@ def toggle_graph_view(n_clicks, zoom_state):
     if n_clicks % 2 == 1:
         selected_fig = go.Figure(fig)
         if zoom_state:
-            #zoom_yaxis[1] = zoom_yaxis[1] - len(missing_tactics)
+            #zoom_yaxis[1] = zoom_yaxis[1] - len(missing_tactics)  #removed this shit lol
             pass
+        
         button_label = 'Show Missing Tactics'
     else:
+        if zoom_state:
+            #zoom_yaxis[1] = zoom_yaxis[1] + len(missing_tactics)
+            pass
         selected_fig = go.Figure(fig_list_all)
         button_label = 'Hide Missing Tactics'
 
@@ -574,6 +601,6 @@ def toggle_graph_view(n_clicks, zoom_state):
         )
 
     return selected_fig.to_dict(), button_label
-
+ 
 if __name__ == '__main__':
     app.run_server(port=8080, host='0.0.0.0')

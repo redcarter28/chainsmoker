@@ -116,6 +116,9 @@ def chainsmoker():
         legend= {'itemsizing': 'constant', 'itemwidth':30}
     )
 
+    # allow scroll zoom
+    fig.show(config={'scrollZoom': True})
+
     # copy fig to fig_list_all and add dummy traces to show all relevant, possible tactics
     fig_list_all = go.Figure(fig.to_plotly_json())
     all_tactics = [

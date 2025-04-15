@@ -391,6 +391,145 @@ app.layout = html.Div(children=[
 # General config
 app.title = 'Chainsmoker'
 
+import plotly.graph_objects as go
+import pandas as pd
+
+# Assuming df is your DataFrame with the necessary data
+# Ensure 'Date/Time MPNET' is in datetime format
+df['Date/Time MPNET'] = pd.to_datetime(df['Date/Time MPNET'], format='%m/%d/%Y, %H%M', errors='coerce')
+
+# Create a unique y-value for each entry to spread them out
+df['Y'] = range(len(df))
+
+# Create the figure
+fig_ioc = go.Figure()
+
+# Add a scatter plot with spline lines
+fig_ioc.add_trace(go.Scatter(
+    x=df['Date/Time MPNET'],
+    y=df['Y'],
+    mode='lines+markers',
+    line_shape='spline',  # Use spline for smooth lines
+    marker=dict(size=8, color='blue'),
+    line=dict(width=2, color='blue'),
+    text=df['Details'],  # Assuming 'Details' is a column with information about each IOC
+    hoverinfo='text',
+    name='IOC'
+))
+
+# Update layout
+fig_ioc.update_layout(
+    title='Indicators of Compromise Over Time',
+    xaxis_title='Time of Action',
+    yaxis_title='IOC Index',
+    plot_bgcolor='rgba(35, 35, 35, 1)',
+    paper_bgcolor='rgba(35, 35, 35, 1)',
+    font=dict(color='white'),
+    title_font=dict(color='white'),
+    margin=dict(l=50, r=50, t=50, b=50),
+    hovermode='closest'
+)
+
+# Show the figure
+fig_ioc.show()
+
+# Assuming df is your DataFrame with the necessary data
+
+# Ensure 'Date/Time MPNET' is in datetime format
+
+df['Date/Time MPNET'] = pd.to_datetime(df['Date/Time MPNET'], format='%m/%d/%Y, %H%M', errors='coerce')
+
+
+# Sort the DataFrame by 'Date/Time MPNET'
+
+df = df.sort_values(by='Date/Time MPNET')
+
+
+# Initialize y-values
+
+y_values = [0] * len(df)
+
+
+# Calculate y-values based on time difference
+
+for i in range(1, len(df)):
+
+    time_diff = (df['Date/Time MPNET'].iloc[i] - df['Date/Time MPNET'].iloc[i - 1]).total_seconds() / 3600
+
+    if time_diff < 1:
+
+        y_values[i] = y_values[i - 1] + 1
+
+    else:
+
+        y_values[i] = 0
+
+
+# Add y-values to the DataFrame
+
+df['Y'] = y_values
+
+
+# Create the figure
+
+fig_ioc = go.Figure()
+
+
+# Add a scatter plot with spline lines
+
+fig_ioc.add_trace(go.Scatter(
+
+    x=df['Date/Time MPNET'],
+
+    y=df['Y'],
+
+    mode='lines+markers',
+
+    line_shape='spline',  # Use spline for smooth lines
+
+    marker=dict(size=8, color='blue'),
+
+    line=dict(width=2, color='blue', smoothing=1.3),
+
+    text=df['Details'],  # Assuming 'Details' is a column with information about each IOC
+
+    hoverinfo='text',
+
+    name='IOC'
+
+))
+
+
+# Update layout
+
+fig_ioc.update_layout(
+
+    title='Indicators of Compromise Over Time',
+
+    xaxis_title='Time of Action',
+
+    yaxis_title='IOC Index',
+
+    plot_bgcolor='rgba(35, 35, 35, 1)',
+
+    paper_bgcolor='rgba(35, 35, 35, 1)',
+
+    font=dict(color='white'),
+
+    title_font=dict(color='white'),
+
+    margin=dict(l=50, r=50, t=50, b=50),
+
+    hovermode='closest'
+
+)
+
+
+# Show the figure
+
+fig_ioc.show()
+
+
 # Utility functions
 def hash_node(clickData):
     if clickData and 'points' in clickData and clickData['points'][0]:
@@ -603,4 +742,4 @@ def toggle_graph_view(n_clicks, zoom_state):
     return selected_fig.to_dict(), button_label
  
 if __name__ == '__main__':
-    app.run_server(port=8080, host='0.0.0.0')
+    app.run(port=8080, host='0.0.0.0')

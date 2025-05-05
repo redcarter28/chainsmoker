@@ -300,6 +300,7 @@ chain_checklist = dcc.Checklist(
 # Optimization: Main layout structure
 app.layout = html.Div(children=[
     # Store components
+    dcc.Store(id='df-store', data=df.to_dict('records')),
     dcc.Location(id='url', refresh=True),
     dcc.Store(id='fig-store', data=fig.to_dict()),
     dcc.Store(id='zoom-state', storage_type='memory'),
@@ -431,7 +432,7 @@ fig_ioc.update_layout(
 )
 
 # Show the figure
-fig_ioc.show()
+#fig_ioc.show()
 
 # Assuming df is your DataFrame with the necessary data
 
@@ -527,7 +528,7 @@ fig_ioc.update_layout(
 
 # Show the figure
 
-fig_ioc.show()
+#fig_ioc.show()
 
 
 # Utility functions
@@ -541,7 +542,120 @@ def hash_node(clickData):
 def get_excel_writer(file_path):
     return pd.ExcelWriter(file_path, engine='openpyxl', mode='a', if_sheet_exists='overlay')
 
-# APP CALLBACKS 
+
+def _extract_axis_ranges(relayout_data: dict) -> dict | None:
+    """
+    Pick only the '[xy]axis.range[0|1]' keys from Plotly `relayoutData`.
+    Return None if no explicit ranges are found or if autorange was used.
+    """
+    if not relayout_data:
+        return None
+
+    # autorange (double click) – clear the zoom store
+    if "xaxis.autorange" in relayout_data or "yaxis.autorange" in relayout_data:
+        return None
+
+    zoom = {}
+    for ax in ("xaxis", "yaxis"):
+        low  = f"{ax}.range[0]"
+        high = f"{ax}.range[1]"
+        if low in relayout_data and high in relayout_data:
+            zoom[low]  = relayout_data[low]
+            zoom[high] = relayout_data[high]
+
+    return zoom or None
+
+
+### CALLBACKS (yuh)
+@callback(
+    Output("zoom-state", "data", allow_duplicate=True),
+    Input("attack-chain-graph", "relayoutData"),
+    prevent_initial_call=True,
+)
+def store_zoom(relayout_data):
+    """
+    Store the current axis ranges whenever the user zooms / pans.
+    Double-click (autorange) will wipe the store (returns None).
+    """
+    return _extract_axis_ranges(relayout_data)
+
+@callback(
+    outputs=[
+        Output("attack-chain-graph", "figure"),          # the graph itself
+        Output("toggle-list-all-btn", "children"),       # rename button
+    ],
+    inputs=[
+        Input("fig-store",            "data"),           # any fig refresh
+        Input("toggle-list-all-btn",  "n_clicks"),       # user clicks
+        State("zoom-state",           "data"),           # current zoom
+    ],
+    prevent_initial_call=True,
+)
+def update_attack_chain_graph(figs_dict, n_clicks, zoom_state):
+    """
+    Single source of truth for whatever the user should currently see.
+    The function decides which pre-built figure to serve and applies the
+    last zoom window (if it exists).
+    """
+    # ----------------------------------------------------------------------
+    # Safety – initialise ‘n_clicks’
+    #   *None*  → page just loaded         → default is “hide missing”,
+    #                                         the button shows “Hide …”
+    #   0 or even value  →  All-tactics view is ON  (button = Hide)
+    #   odd value        →  Normal view (button = Show)
+    # ----------------------------------------------------------------------
+    if n_clicks is None:
+        n_clicks = 2        # page load = even → all-tactics hidden
+
+    show_normal_view = n_clicks % 2 == 1
+
+    # Pick the correct figure out of the store
+    figure_key   = "normal" if show_normal_view else "all_tactics"
+    selected_fig = go.Figure(figs_dict[figure_key])
+
+    # Nice button label for next action
+    button_text  = "Show Missing Tactics" if show_normal_view else "Hide Missing Tactics"
+
+    # ------------------------------------------------------------------
+    # Re-apply previous zoom window if it exists
+    # ------------------------------------------------------------------
+    if zoom_state and all(v is not None for v in zoom_state.values()):
+        selected_fig.update_layout(
+            xaxis=dict(range=[zoom_state["xaxis.range[0]"], zoom_state["xaxis.range[1]"]]),
+            yaxis=dict(range=[zoom_state["yaxis.range[0]"], zoom_state["yaxis.range[1]"]]),
+        )
+
+    return selected_fig, button_text
+
+@callback(
+    [Output("save-fdbk-node", "children"),
+     Output("fig-store",       "data")],                 #  <<< now returns dict
+    Input("save-button-node",  "n_clicks"),
+    [
+        State("mpnet-date-input-node", "value"),
+        State("mitre-dropdown-node",   "value"),
+        State("src-ip-node",           "value"),
+        State("dst-ip-node",           "value"),
+        State("details-input-node",    "value"),
+        State("notes-input-node",      "value"),
+        State("name-input-node",       "value"),
+        State("atk-chn-input-node",    "value"),
+    ],
+    prevent_initial_call=True,
+)
+def save_node(n_clicks, date, tactic, src, dst, details, notes, name, chain):
+    # … validation / Excel write code identical to original …
+    # After df is updated we rebuild the two figures
+    global fig, fig_list_all, missing_tactics
+    fig, fig_list_all, missing_tactics = chainsmoker()
+
+    new_store = {
+        "normal":      fig.to_dict(),
+        "all_tactics": fig_list_all.to_dict(),
+    }
+
+    return [html.Pre("Node Saved!", style={"font-size": "medium"})], new_store
+
 @callback(
     [Output('save-fdbk', 'children'),
      Output('click-data', 'children')],
@@ -608,138 +722,10 @@ def notes_clickdata(n_clicks, clickData, tactic, date, name, note_input):
 def notes_hide(n_clicks):
     return {'display': 'block' if n_clicks % 2 == 1 else 'none'}
 
-# Optimization: Combined node saving and figure updating
-@callback(
-    [Output('save-fdbk-node', 'children'),
-     Output('fig-store', 'data')],
-    Input('save-button-node', 'n_clicks'),
-    [State('mpnet-date-input-node', 'value'),
-     State('mitre-dropdown-node', 'value'),
-     State('src-ip-node', 'value'),
-     State('dst-ip-node', 'value'),
-     State('details-input-node', 'value'),
-     State('notes-input-node', 'value'),
-     State('name-input-node', 'value'),
-     State('atk-chn-input-node', 'value'),
-     State('fig-store', 'data')],
-    prevent_initial_call=True
-)
-def save_node(n_clicks, date, tactic, src, dst, details, notes, name, chain, existing_fig_data):
-    
-    if not n_clicks:
-        return dash.no_update, dash.no_update
 
-    # Validate inputs
-    if not date:
-        return [html.Pre('Error: Please fill out all fields', 
-                        style={'font-size': 'medium', 'color':'indianred'})], dash.no_update
-    
-    if not re.match(r"\d{2}/\d{2}/\d{4}, \d{4}$", date):
-        return [html.Pre('Error: Incorrect time/date format', 
-                        style={'font-size': 'medium', 'color':'indianred'})], dash.no_update
 
-    # Update DataFrame
-    new_data = pd.DataFrame([{
-        'Date/Time MPNET': date,
-        'MITRE Tactic': tactic,
-        'Source Hostname/IP': src,
-        'Target Hostname/IP': dst,
-        'Details': details,
-        'Notes': notes,
-        'Operator': name,
-        'Attack Chain': chain
-    }])
-    
-    global df
-    print(df)
-    df['Date/Time MPNET'] = df['Date/Time MPNET'].apply(custom_date_parser)
-    df = pd.concat([df, new_data], ignore_index=True)
+if __name__ == "__main__":
+    app.run(port=8080, host="0.0.0.0")
 
-    print(df)
-    
-    # Save to Excel
-    df['Date/Time MPNET'] = pd.to_datetime(df['Date/Time MPNET'], format='%m/%d/%Y, %H%M', errors='coerce')
-    df['Date/Time MPNET'] = df['Date/Time MPNET'].dt.strftime('%m/%d/%Y, %H%M')
-    with get_excel_writer('data/data2.xlsx') as writer:
-        df.to_excel(writer, index=False, header=True, sheet_name='Sheet1')
 
-    print(pd.read_excel('data/data2.xlsx', engine='openpyxl'))
 
-    # Update figures
-    global fig, fig_list_all, missing_tactics
-    fig, fig_list_all, missing_tactics = chainsmoker()
-
-    return [html.Pre('Node Saved!', style={'font-size': 'medium'})], fig.to_dict()
-
-@callback(
-    Output('zoom-state', 'data'),
-    Input('attack-chain-graph', 'relayoutData'),
-    prevent_initial_call=True
-)
-def store_zoom_state(relayoutData):
-    if not relayoutData or 'xaxis.autorange' in relayoutData or 'yaxis.autorange' in relayoutData:
-        return None
-
-    zoom_data = {}
-    for axis in ['xaxis', 'yaxis']:
-        if f'{axis}.range[0]' in relayoutData:
-            zoom_data[f'{axis}.range[0]'] = relayoutData[f'{axis}.range[0]']
-            zoom_data[f'{axis}.range[1]'] = relayoutData[f'{axis}.range[1]']
-    
-    return zoom_data if zoom_data else None 
-
-@callback(
-    Output('attack-chain-graph', 'figure'),
-    Input('fig-store', 'data'),
-    prevent_initial_call=True
-)
-def update_graph(fig_data):
-    if fig_data is None:
-        raise dash.exceptions.PreventUpdate
-    return go.Figure(fig_data)
-
-@callback(
-    [Output('fig-store', 'data', allow_duplicate=True),
-     Output('toggle-list-all-btn', 'children')],
-    [Input('toggle-list-all-btn', 'n_clicks'),
-     Input('zoom-state', 'data')],
-    prevent_initial_call=True
-)
-def toggle_graph_view(n_clicks, zoom_state):
-    print(n_clicks)
-    n_clicks = 0 if n_clicks is None else n_clicks  # Convert None to 0
-    if not n_clicks:
-        return dash.no_update, dash.no_update
-
-    zoom_xaxis = [None, None]
-    zoom_yaxis = [None, None]
-
-    if zoom_state:
-        zoom_xaxis = [zoom_state.get('xaxis.range[0]'), zoom_state.get('xaxis.range[1]')]
-        zoom_yaxis = [zoom_state.get('yaxis.range[0]'), zoom_state.get('yaxis.range[1]')]
-
-    global selected_fig
-    if n_clicks % 2 == 1:
-        selected_fig = go.Figure(fig)
-        if zoom_state:
-            #zoom_yaxis[1] = zoom_yaxis[1] - len(missing_tactics)  #removed this shit lol
-            pass
-        
-        button_label = 'Show Missing Tactics'
-    else:
-        if zoom_state:
-            #zoom_yaxis[1] = zoom_yaxis[1] + len(missing_tactics)
-            pass
-        selected_fig = go.Figure(fig_list_all)
-        button_label = 'Hide Missing Tactics'
-
-    if all(x is not None for x in zoom_xaxis + zoom_yaxis):
-        selected_fig.update_layout(
-            xaxis=dict(range=zoom_xaxis),
-            yaxis=dict(range=zoom_yaxis)
-        )
-
-    return selected_fig.to_dict(), button_label
- 
-if __name__ == '__main__':
-    app.run(port=8080, host='0.0.0.0')

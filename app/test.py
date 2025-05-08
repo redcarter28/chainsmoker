@@ -40,7 +40,7 @@ styles = {
 }
 
 # Read data from Excel file using openpyxl
-df = pd.read_excel('data/data2.xlsx', engine='openpyxl')
+df = pd.read_excel('app/data/data2.xlsx', engine='openpyxl')
 
 def custom_date_parser(date_str):
     return pd.to_datetime(date_str, format='%m/%d/%Y, %H%M')
@@ -59,8 +59,8 @@ df['Date/Time MPNET'] = df['Date/Time MPNET'].fillna('No Data')
 df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
 
 # Load JSON DB
-if os.path.exists('db/node_data.json'):
-    with open('db/node_data.json', 'r') as file:
+if os.path.exists('app/db/node_data.json'):
+    with open('app/db/node_data.json', 'r') as file:
         try:
             data = json.load(file)
         except json.JSONDecodeError:

@@ -1,0 +1,4 @@
+# Secrets & local state
+.env
+db/node_data.json
+root.pem

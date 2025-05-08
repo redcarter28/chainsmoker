@@ -1,15 +1,37 @@
 # ─────────────────────────────────────────────────────────────────────────────
-#  CHAINS​MOKER – unified & stateless
+#  CHAINS​MOKER – unified & stateless & uhhhh uhhh uh um
 # ─────────────────────────────────────────────────────────────────────────────
 import os, re, json, math, hashlib
 from itertools import product
-
 import dash
 from dash import dcc, html, dash_table, callback, Input, Output, State
 import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.graph_objects as go
 from openpyxl import load_workbook                                   # noqa
+from sqlalchemy import create_engine
+from flask_session import Session
+from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, session, redirect, url_for, request
+from authlib.integrations.flask_client import OAuth
+import ssl
+import hashlib
+import socket
+from urllib.parse import urlparse
+import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+from authlib.integrations.requests_client import OAuth2Session
+import certifi
+import secrets
+import jwt
+
+context = ssl.create_default_context(cafile=certifi.where())
+http = urllib3.PoolManager(
+    cert_reqs='CERT_REQUIRED',
+    ca_certs='/usr/local/share/ca-certificates/keycloak.crt'
+)
+#os.environ['NO_PROXY'] = os.environ.get('NO_PROXY', '') + ',controller.lan'
 
 # -------------------------------------------------------------------
 # Plotly config used for every graph in the app
@@ -36,6 +58,9 @@ PLOT_CONFIG = dict(
     },
 )
 
+# The certificate fingerprint you got from the openssl command
+EXPECTED_FINGERPRINT = "CB:12:CC:A5:55:F9:4A:97:97:FE:32:76:E3:89:53:36:76:EF:A3:07"  # Replace with your actual fingerprint
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  CONSTANTS & HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
@@ -48,11 +73,10 @@ MITRE_TACTICS = [
 def custom_date_parser(date_str: str):
     return pd.to_datetime(date_str, format='%m/%d/%Y, %H%M', errors='coerce')
 
-def hash_node(click_data):
-    if click_data and click_data.get('points'):
-        p = click_data['points'][0]
-        content = f"{p.get('x','')}{p.get('y','')}{p.get('text','')}"
-        return hashlib.sha1(content.encode()).hexdigest()
+def hash_node(clickData):
+    """Return the stable row_id that was stored in customdata."""
+    if clickData and clickData.get('points'):
+        return str(clickData['points'][0].get('customdata'))
     return None
 
 def clamp(i: int, lo: int, hi: int) -> int:
@@ -62,7 +86,11 @@ def clamp(i: int, lo: int, hi: int) -> int:
 # ─────────────────────────────────────────────────────────────────────────────
 #  DATA LOAD
 # ─────────────────────────────────────────────────────────────────────────────
-df = pd.read_excel('data/data2.xlsx', engine='openpyxl')
+df = pd.read_excel('app/data/data2.xlsx', engine='openpyxl')
+df.reset_index(inplace=True)          # gives an 'index' column 0..N-1
+df.rename(columns={'index': 'row_id'}, inplace=True)
+
+
 df['Date/Time MPNET'] = df['Date/Time MPNET'].apply(custom_date_parser)
 df = df.sort_values(by='Date/Time MPNET', ascending=False)
 df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
@@ -77,8 +105,161 @@ if os.path.exists('db/node_data.json'):
 else:
     NODE_NOTES = {}
 
+# ─── FLASK & SESSION SETUP ────────────────────────────────────────────────
+server = Flask(__name__)
+server.config.update({
+    "SECRET_KEY":               os.environ.get("SECRET_KEY", "dev_secret"),
+    "SQLALCHEMY_DATABASE_URI":  os.environ["DATABASE_URL"],
+
+    # Tell Flask-Session to store sessions in SQLAlchemy…
+    "SESSION_TYPE":             "sqlalchemy",
+    "SESSION_SQLALCHEMY":       None,               # <-- placeholder
+    "SESSION_SQLALCHEMY_TABLE": "flask_sessions",
+    "SESSION_PERMANENT":        False,
+    "SESSION_COOKIE_SECURE":    False,
+    'OIDC_ID_TOKEN_COOKIE_SECURE': False,
+    "SESSION_COOKIE_SAMESITE":  "Lax",
+    'DEBUG': True,
+    
+})
+
+# create your single SQLAlchemy() instance
+db = SQLAlchemy(server)
+
+# now point Flask-Session at it
+server.config["SESSION_SQLALCHEMY"] = db
+
+# initialize Flask-Session, it will pick up your `db`
+Session(server)
+
+# create both `flask_sessions` + your app tables if missing
+with server.app_context():
+    db.create_all()
+
+# ─── COMMENT MODEL ────────────────────────────────────────────────
+class NodeComment(db.Model):
+    __tablename__ = "node_comments"
+    id        = db.Column(db.Integer, primary_key=True)
+    node_id   = db.Column(db.String, nullable=False, index=True)
+    operator  = db.Column(db.String, nullable=False)
+    tactic    = db.Column(db.String, nullable=True)
+    date      = db.Column(db.String, nullable=True)
+    note      = db.Column(db.Text,   nullable=False)
+
+    def to_dict(self):
+        return {
+            "operator": self.operator,
+            "tactic":   self.tactic,
+            "date":     self.date,
+            "note":     self.note
+        }
+
+# Certificate‐pinning adapter for Requests
+class CertificatePinningAdapter(requests.adapters.HTTPAdapter):
+    def init_poolmanager(self, *args, **kwargs):
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        kwargs['ssl_context'] = ctx
+        return super().init_poolmanager(*args, **kwargs)
+
+# Subclass Authlib’s OAuth2Session so it mounts your adapter once
+class PinningOAuth2Session(OAuth2Session):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.mount('https://', CertificatePinningAdapter())
+
+# Basic fingerprint check on startup (fail fast if wrong)
+def verify_cert_fingerprint(hostname, port, expected_fp):
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    with socket.create_connection((hostname, port), timeout=5) as sock:
+        with ctx.wrap_socket(sock, server_hostname=hostname) as ssock:
+            cert = ssock.getpeercert(binary_form=True)
+    fp = hashlib.sha1(cert).hexdigest().upper()
+    fp = ':'.join(fp[i:i+2] for i in range(0, len(fp), 2))
+    return fp == expected_fp.upper()
+
+# Pull issuer URL from ENV and do a quick check
+OIDC_ISSUER      = os.environ["OIDC_ISSUER"]
+EXPECTED_FP      = "CB:12:CC:A5:55:F9:4A:97:97:FE:32:76:E3:89:53:36:76:EF:A3:07"
+parsed           = urlparse(OIDC_ISSUER)
+host, port       = parsed.hostname, parsed.port or 443
+if not verify_cert_fingerprint(host, port, EXPECTED_FP):
+    raise RuntimeError(f"Fingerprint mismatch for {host}:{port}")
+
+# Now register Keycloak with Authlib, telling it to use our session_class
+oauth = OAuth(server)
+OIDC_ISSUER = os.environ["OIDC_ISSUER"]
+oauth.register(
+    name="keycloak",
+    client_id=os.environ["OIDC_CLIENT_ID"],
+    client_secret=os.environ["OIDC_CLIENT_SECRET"],
+    server_metadata_url=f"{OIDC_ISSUER}/.well-known/openid-configuration",
+    client_kwargs={
+        "scope": "openid common_attributes_openid",
+        "verify": "/usr/local/share/ca-certificates/keycloak.crt",
+    },
+)
+# ─── LOGIN GUARD ─────────────────────────────────────────────────────────
+@server.before_request
+def require_login():
+    public_paths = ["/login", "/oidc", "/_dash-", "/assets", "/favicon.ico"]
+    if not session.get("user") and not any(request.path.startswith(p) for p in public_paths):
+        return redirect(url_for("login"))
+
+@server.route("/login")
+def login():
+    nonce = secrets.token_urlsafe(16)
+    session['nonce'] = nonce
+    return oauth.keycloak.authorize_redirect(
+        redirect_uri=os.environ["OAUTH_REDIRECT_URI"],
+        nonce=nonce,
+    )
+
+@server.route("/oidc/callback")
+def auth_cb():
+    try:
+        token = oauth.keycloak.authorize_access_token()
+        
+        # Manual token processing approach
+        if 'id_token' in token:
+            # Decode JWT without verifying signature for debugging
+            decoded = jwt.decode(token['id_token'], options={"verify_signature": False})
+            
+            session["user"] = {
+                "sub": decoded.get("sub"),
+                "email": decoded.get("email", decoded.get("preferred_username")),
+                "name": decoded.get("name", decoded.get("preferred_username")),
+            }
+
+            return redirect("/")
+        else:
+            return "Authentication failed: No ID token in response", 400
+            
+    except Exception as e:
+        import traceback
+        print(f"Authentication error: {str(e)}")
+        print(traceback.format_exc())
+        return f"Authentication failed: {str(e)}", 400
+
+@server.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
+
+# ─── DASH APP ─────────────────────────────────────────────────────────────
+app = dash.Dash(
+    __name__,
+    server=server,
+    external_stylesheets=[dbc.themes.DARKLY],
+    suppress_callback_exceptions=True,
+    url_base_pathname='/'
+)
+
 # ─────────────────────────────────────────────────────────────────────────────
-#  FIGURE BUILD
+#  LAYOUT BUILD
 # ─────────────────────────────────────────────────────────────────────────────
 def build_base_layout():
     return dict(
@@ -96,6 +277,23 @@ def build_base_layout():
         legend={'itemsizing': 'constant', 'itemwidth': 30}
     )
 
+def serve_layout():
+    if not session.get("user"):
+        # This will rarely be seen as the before_request will redirect,
+        # but it's good to have a fallback
+        return html.Div([
+            html.H3("You are not authenticated."),
+            html.A("Login", href="/login")
+        ])
+    else:
+        # Your actual authenticated app layout
+        return False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  FIGURE BUILD
+# ─────────────────────────────────────────────────────────────────────────────
+
 def create_trace(chain_df, chain_id):
     hover = [
         f"<b>Details:</b> {d}<br><b>Notes:</b> {n}<br><b>Found&nbsp;By:</b> {o}"
@@ -108,6 +306,7 @@ def create_trace(chain_df, chain_id):
     return go.Scatter(
         x=chain_df['Date/Time MPNET'].tolist() + [None],
         y=chain_df['MITRE Tactic'].tolist()     + [None],
+        customdata=chain_df['row_id'].tolist(),
         mode='lines+markers',
         marker=dict(size=12, opacity=.8,
                     color=list(range(len(chain_df))),
@@ -153,13 +352,6 @@ def chainsmoker():
 
 fig_normal, fig_all, missing_t, visible_t, all_t = chainsmoker()
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  DASH APP & LAYOUT
-# ─────────────────────────────────────────────────────────────────────────────
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY],
-                suppress_callback_exceptions=True)
-app.title = 'Chainsmoker'
-
 mitre_dropdown_opts = [{'label': t, 'value': t} for t in MITRE_TACTICS]
 
 def build_dropdown(id_):
@@ -195,6 +387,66 @@ toggle_btn = html.Button('Hide Missing Tactics',
                          className='fancy-button',
                          style={'padding':'6px', 'margin-top':'2px'})
 
+node_form = html.Div(
+    dbc.Form(
+        [
+            html.Div(
+                [   
+                    dbc.Input(id='mpnet-date-input-node', placeholder='Date/Time MPNET (MM/DD/YY, XXXX)', style={'width': '100%'}),
+                ],
+                className='InputField',
+            ), 
+            html.Div(
+                dcc.Dropdown(
+                    options=mitre_dropdown_opts,
+                    placeholder="Select MITRE Tactic",
+                    clearable=False,
+                    style={'width': '99.9%', 'color': 'black'},
+                    id='mitre-dropdown-node'
+                ),
+                className='InputField',
+            ),
+            html.Div(
+                [   
+                    dbc.Input(id='src-ip-node', placeholder='Source Hostname/IP', style={'width': '100%'}),
+                ],
+                className='InputField',  
+            ),
+            html.Div(
+                [   
+                    dbc.Input(id='dst-ip-node', placeholder='Destination Hostname/IP', style={'width': '100%'}),
+                ],
+                className='InputField',  
+            ),
+            html.Div(
+                [   
+                    dbc.Input(id='details-input-node', placeholder='Details', style={'width': '100%'}),
+                ],
+                className='InputField',  
+            ),
+            html.Div(
+                [   
+                    dbc.Input(id='notes-input-node', placeholder='Notes', style={'width': '100%'}),
+                ],
+                className='InputField',  
+            ),
+            html.Div(
+                [   
+                    dbc.Input(id='name-input-node', placeholder='Operator', style={'width': '100%'}),
+                ],
+                className='InputField',  
+            ),
+            html.Div(
+                [   
+                    dbc.Input(id='atk-chn-input-node', placeholder='Attack Chain', style={'width': '100%'}),
+                ],
+                className='InputField',  
+            )
+        ], 
+        style={'padding': '4px'},
+        id='node-form')
+)
+
 app.layout = html.Div([
     dcc.Store(id='fig-store', data={'normal': fig_normal.to_dict(),
                                     'all':    fig_all.to_dict()}),
@@ -206,7 +458,7 @@ app.layout = html.Div([
     html.H1(children=[
             html.Img(src='assets/logo.png', 
                     style={'display':'inline', 'width':'96px', 'height':'96px', 'padding':'2px'}),
-            html.Div('Chainsmoker', style={'font-size':'calc(24px + 1.5vw)'})
+            html.Div('Chainsmoker', style={'font-size':'calc(24px + .75vw)'})
         ], className='page-title'),
 
 
@@ -224,7 +476,22 @@ app.layout = html.Div([
     html.Div([form,
               dcc.Textarea(id='note-input', style={'width':'90%','height':'100px'}),
               save_note_btn], id='notes-hide', style={'display':'none'}),
-])
+
+    # --- note input -----------------------------------------------------
+    
+    html.Div([
+            node_form,
+            html.Button('Submit', 
+                       id='save-button-node', 
+                       n_clicks=0, 
+                       style={'padding': '6px', 'margin-top': '2px'}, 
+                       className='fancy-button'),
+            html.Pre(id='save-fdbk-node', style={'margin-top': '4px'})
+        ], id='node-hide', style={'text-align':'left', 'visible': 'block', 'padding-left':'8px'}),
+
+
+    ])
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  CALLBACKS
@@ -344,6 +611,16 @@ def notes_clickdata(n_clicks, clickData, tactic, date, name, note_input):
         )
         with open('db/node_data.json', 'w') as fh:
             json.dump(NODE_NOTES, fh, indent=2)
+        comment = NodeComment(
+            node_id=str(node_id),
+            operator=name or "unknown",
+            tactic=tactic,
+            date=date,
+            note=note_input
+        )
+        db.session.add(comment)
+        db.session.commit()
+
         feedback = 'Notes Saved!'
     else:
         feedback = ''
@@ -375,6 +652,64 @@ def notes_clickdata(n_clicks, clickData, tactic, date, name, note_input):
 )
 def notes_hide(n_clicks):
     return {'display': 'block' if n_clicks % 2 == 1 else 'none'}
+
+@callback(
+    Output('save-fdbk-node', 'children'),
+    Output('fig-store', 'data'),
+    Input('save-button-node', 'n_clicks'),
+    State('mpnet-date-input-node', 'value'),
+    State('mitre-dropdown-node', 'value'),
+    State('src-ip-node', 'value'),
+    State('dst-ip-node', 'value'),
+    State('details-input-node', 'value'),
+    State('notes-input-node', 'value'),
+    State('name-input-node', 'value'),
+    State('atk-chn-input-node', 'value'),
+    prevent_initial_call=True
+)
+def save_node(
+    n_clicks, date, tactic, src, dst, details, notes, name, chain
+):
+    if not n_clicks:
+        return dash.no_update, dash.no_update
+    # Validate required fields
+    if not (date and tactic and src and dst and chain):
+        return html.Pre('Error: please fill out all required fields.', style={'color': 'indianred'}), dash.no_update
+    
+    # DATE VALIDATION
+    import re
+    if not re.match(r"\d{2}/\d{2}/\d{4}, \d{4}$", date):
+        return html.Pre('Error: Incorrect date/time format.', style={'color': 'indianred'}), dash.no_update
+    
+    # Reload the dataframe fresh
+    df = pd.read_excel('data/data2.xlsx', engine='openpyxl')
+    if 'row_id' not in df.columns:
+        df.reset_index(inplace=True)
+        df.rename(columns={'index': 'row_id'}, inplace=True)
+    
+    # Add new row
+    new_row_id = int(df['row_id'].max()) + 1 if len(df) else 0
+    new_row = {
+        'row_id': new_row_id,
+        'Date/Time MPNET': date,
+        'MITRE Tactic': tactic,
+        'Source Hostname/IP': src,
+        'Target Hostname/IP': dst,
+        'Details': details,
+        'Notes': notes,
+        'Operator': name,
+        'Attack Chain': chain
+    }
+    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+    # Persist to Excel
+    df.to_excel('data/data2.xlsx', index=False)
+    
+    # Rebuild figures… assuming stateless `chainsmoker()` exists (see previous context)
+
+    fig_normal, fig_all, missing_t, visible_t, all_t = chainsmoker()  # no globals!
+    fig_store = {'normal': fig_normal.to_dict(), 'all': fig_all.to_dict()}
+
+    return html.Pre('Node Saved!', style={'color': 'limegreen'}), fig_store
 
 # ─────────────────────────────────────────────────────────────────────────────
 

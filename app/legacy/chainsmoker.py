@@ -76,7 +76,6 @@ def chainsmoker():
 
         chain_df = df[df['Attack Chain'] == chain_id]
 
-        # Create a list of formatted strings combining 'Details' and 'Notes' for each point
         hover_text = [f"<b>Details:</b> {details} <br><b>Notes:</b> {notes}<br><b>Found By:</b> {operator} <br><b>Attack Chain:</b> {att}" for details, notes, operator, att in zip(chain_df['Details'], chain_df['Notes'], chain_df['Operator'], chain_df['Attack Chain'])]
 
         fig.add_trace(go.Scatter(
@@ -86,12 +85,12 @@ def chainsmoker():
             marker=dict(
                 size=12,
                 opacity=0.8,
-                color=list(range(len(chain_df))),  # Adjusting color range to match the length of chain_df
+                color=list(range(len(chain_df))),  # adjusting color range to match the length of chain_df
                 colorscale='sunset',
                 line=dict(width=1, color='DarkSlateGrey')
             ),
             line=dict(color='grey', width=2),
-            text=hover_text,  # Use the formatted hover text
+            text=hover_text, 
             hoverinfo='text',
             showlegend=True,
             name= str(chain_id)
@@ -117,7 +116,7 @@ def chainsmoker():
     )
 
     # allow scroll zoom
-    fig.show(config={'scrollZoom': True})
+    #fig.show(config={'scrollZoom': True})
 
     # copy fig to fig_list_all and add dummy traces to show all relevant, possible tactics
     fig_list_all = go.Figure(fig.to_plotly_json())

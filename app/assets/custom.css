@@ -2,146 +2,201 @@
 html, body {
     margin: 0;
     padding: 0;
-    font-family: "Open Sans", sans-serif; /* or your preferred modern font */
-    background-color: #1a1a1a; /* Slightly lighter than pure black */
-    color: #f0f0f0; /* Softer white text */
-}
-
-/* Make headings stand out with a bold, modern look */
-h1, h2, h3, h4, h5, h6 {
-    color: #ffffff;
+    font-family: "Open Sans", sans-serif;
+    background-color: #1a1a1a;
+    color: #f0f0f0;
+    min-height: 100vh;
+  }
+  
+  /* Headings - bold and modern */
+  h1, h2, h3, h4, h5, h6 {
+    color: #fff;
     font-weight: 600;
     margin: 0;
     padding: 8px 0;
-}
-
-/* ===== Graph Container ===== */
-.fig {
-    border: 1px solid #444; /* Subtle border */
-    border-radius: 6px; /* Rounded corners for a modern look */
-    padding: 8px;
-    margin: 12px;
-    background-color: #242424; /* Slightly different from main bg */
-}
-
-/* ===== Node Data Container ===== */
-.three.columns {
-    background-color: #242424;
-    border-radius: 6px;
-    padding: 12px;
-    margin: 12px;
-}
-
-/* Adjust the Markdown label styling */
-.three.columns > div > .dash-markdown {
-    color: #f0f0f0;
-    font-weight: 500;
-}
-
-/* ===== Buttons & Inputs ===== */
-button, .btn, .btn-primary {
-    background-color: #343a40; /* Dark gray */
-    color: #f0f0f0;
-    border: 1px solid #555;
-    border-radius: 4px;
-    padding: 8px 12px;
-    transition: background-color 0.2s ease;
-}
-
-button:hover, .btn:hover, .btn-primary:hover {
-    background-color: #4f575c; /* Slightly lighter on hover */
-    cursor: pointer;
-}
-
-input[type="text"], textarea, .dash-input, .dash-textarea {
-    background-color: #2b2b2b;
-    color: #f0f0f0;
-    border: 1px solid #444;
-    border-radius: 4px;
-    padding: 6px;
-    width: 100%;
-}
-
-/* ===== DataTable styling ===== */
-#notes-table .dash-table-container .dash-spreadsheet {
-    background-color: #2b2b2b;
-}
-
-#notes-table .dash-table-container .dash-spreadsheet-container {
-    border: none;
-}
-
-#notes-table .dash-header div.dash-header-cell {
-    background-color: #333333;
-    border-bottom: 1px solid #555;
-    color: #f0f0f0;
-}
-
-#notes-table .dash-cell {
-    border-bottom: 1px solid #444;
-}
-
-/* Hover effect on table rows */
-#notes-table .dash-cell:hover {
-    background-color: #3a3a3a;
-}
-
-/* ===== Title and Logo ===== */
-.page-title {
+  }
+  
+  /* ===== Title and Logo ===== */
+  .page-title {
     display: flex;
     align-items: center;
     gap: 8px;
     font-size: 2em;
-}
-
-.page-title img {
+    margin: 12px 24px;
+  }
+  .page-title img {
     border-radius: 50%;
-}
-
-/* Subtle hover effect for clickable items (if you want it for your graph, etc.) */
-.fig:hover {
+  }
+  
+  /* ===== Graph Container ===== */
+  .fig {
+    align-items: center;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 8px;
+    margin: 12px auto;
+    background-color: #242424;
+    max-width: 100%;
+  }
+  .fig:hover {
     box-shadow: 0 0 8px rgba(255, 255, 255, 0.1);
-}
-
-.fancy-button {
-    background-color: #464b50;
+  }
+  
+  /* ===== Node Data Container ===== */
+  .three.columns {
+    background-color: #242424;
+    border-radius: 6px;
+    padding: 12px;
+    margin: 12px;
+  }
+  .three.columns > div > .dash-markdown {
+    color: #f0f0f0;
+    font-weight: 500;
+  }
+  
+  /* ===== Buttons & Inputs ===== */
+  button, .btn, .btn-primary {
+    background-color: #343a40;
     color: #f0f0f0;
     border: 1px solid #555;
     border-radius: 4px;
+    padding: 8px 12px;
+    transition: background-color 0.2s ease, transform 0.1s ease-in-out;
+    font-size: 1rem;
+    line-height: 1.3;
+  }
+  button:hover, .btn:hover, .btn-primary:hover {
+    background-color: #4f575c;
+    cursor: pointer;
+  }
+  .fancy-button {
+    background-color: #464b50;
+    border: 1px solid #555;
     padding: 10px 20px;
     transition: transform 0.1s ease-in-out, background-color 0.2s ease;
   }
-
-button.fancy-button {
-    background-color: #464b50;
+  button.fancy-button {
     border: 1px solid #6e6e6e;
   }
+  .fancy-button:hover {
+    background-color: #4f575c;
+    transform: scale(1.05);
+  }
   
-.fancy-button:hover {
-transform: scale(1.05);
-background-color: #4f575c;
-}
-
-.InputField {
-    width: 20%;
-    min-width: 400px;
-}
-
-.fancy-border {
+  /* ===== Inputs and Dropdowns ===== */
+  input[type="text"], textarea, .dash-input, .dash-textarea, select, .InputField > * {
+    background-color: #2b2b2b;
+    color: #f0f0f0;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 6px 10px;
+    width: 100%;
+    font-size: 1rem;
+    font-family: "Open Sans", sans-serif;
+    box-sizing: border-box;
+  }
+  textarea {
+    resize: vertical;
+    min-height: 100px;
+    border-radius: 6px;
+  }
+  
+  /* ===== Input Field Wrapper ===== */
+  .InputField {
+    width: 100%;
+    max-width: 500px;
+    margin-bottom: 12px;
+  }
+  
+  /* ===== Forms and Containers ===== */
+  form, .dbc-form, #node-form, form.dash-form {
+    padding: 2px 0;
+    max-width: 520px;
+    width: 100%;
+  }
+  
+  /* ===== Textarea Styling ===== */
+  #note-input {
+    background-color: #2b2b2b;
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-top: 12px;
+    color: #f0f0f0;
+  }
+  
+  /* ===== Feedback Text ===== */
+  pre {
+    color: #ccc;
+    margin-top: 4px;
+    font-size: 0.9rem;
+    letter-spacing: 0.5px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  
+  /* ===== Fancy Border Boxes ===== */
+  .fancy-border {
     background-color: #343a40;
     color: #f0f0f0;
     border: 1px solid #555;
     border-radius: 4px;
-    padding: 5px 5px;
+    padding: 12px;
+    margin: 12px auto;
+  }
+  
+  /* ===== Top Bar Styling ===== */
+  .top-bar {
+    display: flex;
+    justify-content: space-between;
     align-items: center;
+    padding: 0 12px; /* You can reduce this if you want */
+    height: 60px;
+    background-color: #1a1a1a;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    border-radius: 6px;
+    padding: 8px;
+    margin: 12px auto;
+    box-sizing: border-box;
+  }
+  
+  /* Remove left padding to allow toggle button flush right */
+  .top-bar-toggle {
+    padding-left: 0; 
+    margin-left: auto; /* push to right */
+    display: flex; /* ensure flex context if needed */
+    align-items: center;
+    padding: 6px 24px;
   }
 
-pre.fancy-border {
-    background-color: #343a40;
+  .top-bar-user {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 300;
     color: #f0f0f0;
-    border: 1px solid #555; 
-    border-radius: 4px; 
-    padding: 12px; 
-    white-space: pre-wrap; 
-    word-wrap: break-word; 
-}
+    font-size: 1.1rem;
+    padding-left: 0px;
+  }
+  .top-bar-user a.fancy-button {
+    font-size: 1rem;
+    padding: 6px 12px;
+  }
+  
+  /* ===== DataTable styling ===== */
+  #notes-table .dash-table-container .dash-spreadsheet {
+    background-color: #2b2b2b;
+  }
+  #notes-table .dash-table-container .dash-spreadsheet-container {
+    border: none;
+  }
+  #notes-table .dash-header div.dash-header-cell {
+    background-color: #333333;
+    border-bottom: 1px solid #555;
+    color: #f0f0f0;
+  }
+  #notes-table .dash-cell {
+    border-bottom: 1px solid #444;
+  }
+  #notes-table .dash-cell:hover {
+    background-color: #3a3a3a;
+  }

@@ -12,3 +12,4 @@ authlib
 pip-system-certs
 certifi
 PyJWT
+selenium

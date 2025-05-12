@@ -25,6 +25,8 @@ from authlib.integrations.requests_client import OAuth2Session
 import certifi
 import secrets
 import jwt
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
+from integrations.seconion import OnionHandler
 
 context = ssl.create_default_context(cafile=certifi.where())
 http = urllib3.PoolManager(
@@ -82,6 +84,17 @@ def hash_node(clickData):
 def clamp(i: int, lo: int, hi: int) -> int:
     """Return i clamped to the closed interval [lo, hi]."""
     return max(lo, min(i, hi))
+
+def memes(i, value):
+    match i:
+        case 'name':
+            if 'Blake Davidson' in value:
+                return 'Blakonater (w/ cheese)'
+            if 'Abraham Molina' in value:
+                return 'chainsmonker'
+            if 'Cracraft' in value:
+                return 'The Venerable (Honorable) Distinguished Chief Warrant Officer 2 (II, two) Mr. Sir Dennis Cracraft'
+    return value
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  DATA LOAD
@@ -154,40 +167,17 @@ class NodeComment(db.Model):
             "note":     self.note
         }
 
-# Certificate‐pinning adapter for Requests
-class CertificatePinningAdapter(requests.adapters.HTTPAdapter):
-    def init_poolmanager(self, *args, **kwargs):
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        kwargs['ssl_context'] = ctx
-        return super().init_poolmanager(*args, **kwargs)
-
-# Subclass Authlib’s OAuth2Session so it mounts your adapter once
-class PinningOAuth2Session(OAuth2Session):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.mount('https://', CertificatePinningAdapter())
-
-# Basic fingerprint check on startup (fail fast if wrong)
-def verify_cert_fingerprint(hostname, port, expected_fp):
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-    with socket.create_connection((hostname, port), timeout=5) as sock:
-        with ctx.wrap_socket(sock, server_hostname=hostname) as ssock:
-            cert = ssock.getpeercert(binary_form=True)
-    fp = hashlib.sha1(cert).hexdigest().upper()
-    fp = ':'.join(fp[i:i+2] for i in range(0, len(fp), 2))
-    return fp == expected_fp.upper()
-
-# Pull issuer URL from ENV and do a quick check
-OIDC_ISSUER      = os.environ["OIDC_ISSUER"]
-EXPECTED_FP      = "CB:12:CC:A5:55:F9:4A:97:97:FE:32:76:E3:89:53:36:76:EF:A3:07"
-parsed           = urlparse(OIDC_ISSUER)
-host, port       = parsed.hostname, parsed.port or 443
-if not verify_cert_fingerprint(host, port, EXPECTED_FP):
-    raise RuntimeError(f"Fingerprint mismatch for {host}:{port}")
+# ─── OAuth Setup ─────────────────────────────────────────────────────────
+oauth = OAuth(server)
+oauth.register(
+    name='keycloak',
+    client_id=os.environ["OIDC_CLIENT_ID"],
+    client_secret=os.environ["OIDC_CLIENT_SECRET"],
+    server_metadata_url=f"{os.environ['OIDC_ISSUER']}/.well-known/openid-configuration",
+    client_kwargs={
+        'scope': 'openid email profile',
+    }
+)
 
 # Now register Keycloak with Authlib, telling it to use our session_class
 oauth = OAuth(server)
@@ -202,13 +192,16 @@ oauth.register(
         "verify": "/usr/local/share/ca-certificates/keycloak.crt",
     },
 )
-# ─── LOGIN GUARD ─────────────────────────────────────────────────────────
-@server.before_request
-def require_login():
-    public_paths = ["/login", "/oidc", "/_dash-", "/assets", "/favicon.ico"]
-    if not session.get("user") and not any(request.path.startswith(p) for p in public_paths):
-        return redirect(url_for("login"))
+# ─── Auth Check Function ─────────────────────────────────────────────────────────
+def auth_required(func):
+    def wrapper(*args, **kwargs):
+        if not session.get("user"):
+            return redirect("/login")
+        return func(*args, **kwargs)
+    wrapper.__name__ = func.__name__
+    return wrapper
 
+# ─── Auth Routes ─────────────────────────────────────────────────────────
 @server.route("/login")
 def login():
     nonce = secrets.token_urlsafe(16)
@@ -220,34 +213,63 @@ def login():
 
 @server.route("/oidc/callback")
 def auth_cb():
-    try:
-        token = oauth.keycloak.authorize_access_token()
-        
-        # Manual token processing approach
-        if 'id_token' in token:
-            # Decode JWT without verifying signature for debugging
-            decoded = jwt.decode(token['id_token'], options={"verify_signature": False})
-            
-            session["user"] = {
-                "sub": decoded.get("sub"),
-                "email": decoded.get("email", decoded.get("preferred_username")),
-                "name": decoded.get("name", decoded.get("preferred_username")),
-            }
+    token = oauth.keycloak.authorize_access_token()
+    if 'id_token' not in token:
+        return "No id_token!", 400
 
-            return redirect("/")
-        else:
-            return "Authentication failed: No ID token in response", 400
-            
-    except Exception as e:
-        import traceback
-        print(f"Authentication error: {str(e)}")
-        print(traceback.format_exc())
-        return f"Authentication failed: {str(e)}", 400
+    # decode just to pull out sub/email/name (you can skip signature‐verify for demo)
+    decoded = jwt.decode(token['id_token'], options={"verify_signature": False})
+    session["user"]     = {
+      "sub":   decoded.get("sub"),
+      "email": decoded.get("email", decoded.get("preferred_username")),
+      "name":  decoded.get("name", decoded.get("preferred_username")),
+    }
+    # <-- store the raw id_token so we can hint Keycloak on logout
+    session["id_token"] = token["id_token"]
+
+    return redirect("/")
+
+from urllib.parse import urlencode
 
 @server.route("/logout")
 def logout():
+    # Grab the raw id_token_hint we saved
+    id_token = session.get("id_token")
+
+    # Wipe out our Flask session first
     session.clear()
-    return redirect("/login")
+
+    # Pull Keycloak’s metadata yourself
+    metadata = oauth.keycloak.load_server_metadata()
+    end_session = metadata.get(
+        "end_session_endpoint",
+        # fallback if metadata is missing
+        os.environ["OIDC_ISSUER"].rstrip("/") 
+        + "/protocol/openid-connect/logout"
+    )
+
+    # Where to send them back once Keycloak logs you out
+    post_logout = url_for("login", _external=True)
+
+    # Build the query string
+    params = {
+        "post_logout_redirect_uri": post_logout
+    }
+    if id_token:
+        params["id_token_hint"] = id_token
+
+    return redirect(f"{end_session}?{urlencode(params)}")
+
+# ─── Public Routes Middleware ─────────────────────────────────────────────────────────
+@server.before_request
+def check_auth():
+    public_paths = ["/login", "/oidc", "/_dash-", "/assets", "/favicon.ico"]
+    if not session.get("user") and not any(request.path.startswith(p) for p in public_paths):
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            # For AJAX requests, return a 401 status code
+            return "Unauthorized", 401
+        return redirect("/login")
+
 
 # ─── DASH APP ─────────────────────────────────────────────────────────────
 app = dash.Dash(
@@ -255,11 +277,11 @@ app = dash.Dash(
     server=server,
     external_stylesheets=[dbc.themes.DARKLY],
     suppress_callback_exceptions=True,
-    url_base_pathname='/'
+    routes_pathname_prefix='/'
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  LAYOUT BUILD
+#  FIGURE LAYOUT BUILD
 # ─────────────────────────────────────────────────────────────────────────────
 def build_base_layout():
     return dict(
@@ -277,18 +299,31 @@ def build_base_layout():
         legend={'itemsizing': 'constant', 'itemwidth': 30}
     )
 
-def serve_layout():
-    if not session.get("user"):
-        # This will rarely be seen as the before_request will redirect,
-        # but it's good to have a fallback
-        return html.Div([
-            html.H3("You are not authenticated."),
-            html.A("Login", href="/login")
-        ])
-    else:
-        # Your actual authenticated app layout
-        return False
+# ─── Auth Middleware ─────────────────────────────────────────────────────────
+# Create middleware that will handle auth checks for Dash
+class AuthMiddleware:
+    def __init__(self, app):
+        self.app = app
 
+    def __call__(self, environ, start_response):
+        # Get the Flask request object
+        with server.request_context(environ):
+            # Check if user is authenticated
+            if not session.get("user"):
+                # Check if this is a path that should be public
+                path = environ.get('PATH_INFO', '')
+                public_paths = ["/login", "/oidc", "/_dash-", "/assets", "/favicon.ico"]
+                
+                if not any(path.startswith(p) for p in public_paths):
+                    # Redirect to login for protected routes
+                    redirect_response = redirect("/login")
+                    return redirect_response(environ, start_response)
+            
+            # Continue with the request if authenticated or public path
+            return self.app(environ, start_response)
+
+
+server.wsgi_app = AuthMiddleware(server.wsgi_app)
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  FIGURE BUILD
@@ -358,12 +393,13 @@ def build_dropdown(id_):
     return dcc.Dropdown(id=id_, options=mitre_dropdown_opts,
                         placeholder="Select MITRE Tactic",
                         clearable=False,
-                        style={'width': '100%', 'color': 'black'})
+                        style={'width': '100%', 'color': 'black'},
+                        className='InputField')
 
 # ───── controls / forms (trimmed for brevity – unchanged UI) ─────
 name_field = html.Div(dbc.Input(id='name-input', placeholder='Operator',
                                 style={'width': '100%'}), className='InputField')
-mitre_drop = html.Div(build_dropdown('mitre-dropdown'), className='InputField')
+mitre_drop = build_dropdown('mitre-dropdown')
 mpnet_date_field = html.Div(dbc.Input(id='mpnet-date',
                            placeholder='Date/Time MPNET (MM/DD/YYYY, XXXX)',
                            style={'width': '100%'}), className='InputField')
@@ -387,6 +423,11 @@ toggle_btn = html.Button('Hide Missing Tactics',
                          className='fancy-button',
                          style={'padding':'6px', 'margin-top':'2px'})
 
+csrf_btn = html.Button('Test CSRF',
+                         id='csrf-btn', n_clicks=0,
+                         className='fancy-button',
+                         style={'padding':'6px', 'margin-top':'2px'})
+
 node_form = html.Div(
     dbc.Form(
         [
@@ -396,16 +437,14 @@ node_form = html.Div(
                 ],
                 className='InputField',
             ), 
-            html.Div(
-                dcc.Dropdown(
+            dcc.Dropdown(
                     options=mitre_dropdown_opts,
                     placeholder="Select MITRE Tactic",
                     clearable=False,
                     style={'width': '99.9%', 'color': 'black'},
-                    id='mitre-dropdown-node'
+                    id='mitre-dropdown-node',
+                    className='InputField'
                 ),
-                className='InputField',
-            ),
             html.Div(
                 [   
                     dbc.Input(id='src-ip-node', placeholder='Source Hostname/IP', style={'width': '100%'}),
@@ -447,50 +486,74 @@ node_form = html.Div(
         id='node-form')
 )
 
-app.layout = html.Div([
-    dcc.Store(id='fig-store', data={'normal': fig_normal.to_dict(),
-                                    'all':    fig_all.to_dict()}),
-    dcc.Store(id='zoom-state', storage_type='memory'),
-    dcc.Store(id='internal-counter', data=0, storage_type='memory'),
-    dcc.Location(id='url', refresh=True),
-    
-
-    html.H1(children=[
-            html.Img(src='assets/logo.png', 
-                    style={'display':'inline', 'width':'96px', 'height':'96px', 'padding':'2px'}),
-            html.Div('Chainsmoker', style={'font-size':'calc(24px + .75vw)'})
-        ], className='page-title'),
 
 
-    html.Div(toggle_btn, style={'text-align':'right', 'margin-right':'20px'}),
+# ─────────────────────────────────────────────────────────────────────────────
+#  LAYOUT + HANDLING
+# ─────────────────────────────────────────────────────────────────────────────
 
-    dcc.Graph(id='attack-chain-graph',
-              figure=fig_all,                 # start with all-tactics
-              config=PLOT_CONFIG,
-              className='fig', style={'margin':'12px'}),
+def serve_layout():
+    layout = html.Div([
+        dcc.Store(id='fig-store', data={'normal': fig_normal.to_dict(),
+                                        'all':    fig_all.to_dict()}),
+        dcc.Store(id='zoom-state', storage_type='memory'),
+        dcc.Store(id='internal-counter', data=0, storage_type='memory'),
+        dcc.Location(id='url', refresh=True),
+        
 
-    html.Pre('Click on a node to retrieve data', id='click-data',
-             className='fancy-border', style={'margin':'12px'}),
+        html.H1(children=[
+                html.Img(src='assets/logo.png', 
+                        style={'display':'inline', 'width':'96px', 'height':'96px', 'padding':'2px'}),
+                html.Div('Chainsmoker', style={'font-size':'calc(24px + .75vw)'})
+            ], className='page-title'),
 
-    # --- note entry UI (unchanged) --------------------------------------
-    html.Div([form,
-              dcc.Textarea(id='note-input', style={'width':'90%','height':'100px'}),
-              save_note_btn], id='notes-hide', style={'display':'none'}),
 
-    # --- note input -----------------------------------------------------
-    
-    html.Div([
-            node_form,
-            html.Button('Submit', 
-                       id='save-button-node', 
-                       n_clicks=0, 
-                       style={'padding': '6px', 'margin-top': '2px'}, 
-                       className='fancy-button'),
-            html.Pre(id='save-fdbk-node', style={'margin-top': '4px'})
-        ], id='node-hide', style={'text-align':'left', 'visible': 'block', 'padding-left':'8px'}),
+        html.Div(children=[
+            html.Div([
+                html.Div([
+                    html.Div([
+                        html.Div(f"Welcome, {memes('name', str(session.get('user', {}).get('name', 'User')))}"),
+                        html.A("Logout", href="/logout", className="fancy-button"),
+                    ], className="top-bar-user"),
+                    
+                    html.Div(toggle_btn, className="top-bar-toggle"),  # toggle button container
+                    html.Div(csrf_btn, className="top-bar-toggle"),  # toggle button container
+                ], className='top-bar', id='top-bar')
+            ]),
+        ]),
+
+        html.Pre(id='csrf-btn-fdbk', style={'font-size': 'medium'}),
+
+        dcc.Graph(id='attack-chain-graph',
+                figure=fig_all,                 # start with all-tactics
+                config=PLOT_CONFIG,
+                className='fig', style={'margin':'12px'}),
+
+        html.Pre('Click on a node to retrieve data', id='click-data',
+                className='fancy-border', style={'margin':'12px'}),
+
+        # --- note entry UI (unchanged) --------------------------------------
+        html.Div([form,
+                dcc.Textarea(id='note-input', style={'width':'90%','height':'100px'}),
+                save_note_btn], id='notes-hide', style={'display':'none'}),
+
+        # --- note input -----------------------------------------------------
+        
+        html.Div([
+                node_form,
+                html.Button('Submit', 
+                        id='save-button-node', 
+                        n_clicks=0, 
+                        style={'padding': '6px', 'margin-top': '2px'}, 
+                        className='fancy-button'),
+                html.Pre(id='save-fdbk-node', style={'margin-top': '4px'})
+            ], id='node-hide', style={'text-align':'left', 'visible': 'block', 'padding-left':'8px'}),
 
 
     ])
+    return layout
+
+app.layout = serve_layout
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -711,8 +774,19 @@ def save_node(
 
     return html.Pre('Node Saved!', style={'color': 'limegreen'}), fig_store
 
+@callback(
+    Output('csrf-btn-fdbk', 'children'),
+    Input('csrf-btn', 'n_clicks')
+)
+def csrf_fdbk(n_clicks):
+    if n_clicks:
+        handler = OnionHandler(base_url="172.25.7.201")
+
+        return handler.get_csrf_token()
+
 # ─────────────────────────────────────────────────────────────────────────────
 
 
 if __name__ == '__main__':
     app.run(port=8080, host='0.0.0.0')
+

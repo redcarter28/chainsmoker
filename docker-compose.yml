@@ -11,16 +11,44 @@ services:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
       retries: 5
+    networks:
+      - app_network
 
   web:
     build: .
     depends_on:
       postgres:
         condition: service_healthy
+      selenium:
+        condition: service_healthy
     env_file:
       - .env
     ports:
       - "8080:8080"
+    networks:
+      - app_network
+
+  selenium:
+    image: selenium/standalone-firefox:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    ports:
+      - "5313:4444"
+    shm_size: 2gb
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl --silent --fail http://localhost:4444/status || exit 1"]
+      interval: 5s
+      retries: 10
+      start_period: 10s
 
 volumes:
   pgdata:
+
+networks:
+  app_network:
+    driver: bridge

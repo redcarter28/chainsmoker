@@ -20,6 +20,7 @@ RUN pip install --no-cache-dir -r req.txt
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates \
  && rm -rf /var/lib/apt/lists/*
+
 COPY keycloak.crt /usr/local/share/ca-certificates/
 RUN update-ca-certificates
 
@@ -32,6 +33,7 @@ COPY ./ ./
 
 # Expose the Dash default port
 EXPOSE 8080
+
 
 # Run the app
 CMD ["python", "app/chainsmoker_v2.1.py"]

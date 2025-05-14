@@ -37,6 +37,7 @@ services:
       - .env
     ports:
       - "5313:4444"
+      - "7900:7900"
     shm_size: 2gb
     networks:
       - app_network

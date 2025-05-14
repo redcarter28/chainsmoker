@@ -35,6 +35,19 @@ http = urllib3.PoolManager(
 )
 #os.environ['NO_PROXY'] = os.environ.get('NO_PROXY', '') + ',controller.lan'
 
+requireAuth = False # enable or disable OIDC
+
+def auth_required(func):
+    if not requireAuth:
+        return func  # No-op decorator
+    def wrapper(*args, **kwargs):
+        if not session.get("user"):
+            return redirect("/login")
+        return func(*args, **kwargs)
+    wrapper.__name__ = func.__name__
+    return wrapper
+
+
 # -------------------------------------------------------------------
 # Plotly config used for every graph in the app
 # -------------------------------------------------------------------
@@ -136,6 +149,8 @@ server.config.update({
     
 })
 
+
+
 # create your single SQLAlchemy() instance
 db = SQLAlchemy(server)
 
@@ -168,16 +183,17 @@ class NodeComment(db.Model):
         }
 
 # ─── OAuth Setup ─────────────────────────────────────────────────────────
-oauth = OAuth(server)
-oauth.register(
-    name='keycloak',
-    client_id=os.environ["OIDC_CLIENT_ID"],
-    client_secret=os.environ["OIDC_CLIENT_SECRET"],
-    server_metadata_url=f"{os.environ['OIDC_ISSUER']}/.well-known/openid-configuration",
-    client_kwargs={
-        'scope': 'openid email profile',
-    }
-)
+if requireAuth:
+    oauth = OAuth(server)
+    oauth.register(
+        name='keycloak',
+        client_id=os.environ["OIDC_CLIENT_ID"],
+        client_secret=os.environ["OIDC_CLIENT_SECRET"],
+        server_metadata_url=f"{os.environ['OIDC_ISSUER']}/.well-known/openid-configuration",
+        client_kwargs={
+            'scope': 'openid email profile',
+        }
+    )
 
 # Now register Keycloak with Authlib, telling it to use our session_class
 oauth = OAuth(server)
@@ -202,63 +218,52 @@ def auth_required(func):
     return wrapper
 
 # ─── Auth Routes ─────────────────────────────────────────────────────────
-@server.route("/login")
-def login():
-    nonce = secrets.token_urlsafe(16)
-    session['nonce'] = nonce
-    return oauth.keycloak.authorize_redirect(
-        redirect_uri=os.environ["OAUTH_REDIRECT_URI"],
-        nonce=nonce,
-    )
+if requireAuth:
+    @server.route("/login")
+    def login():
+        nonce = secrets.token_urlsafe(16)
+        session['nonce'] = nonce
+        return oauth.keycloak.authorize_redirect(
+            redirect_uri=os.environ["OAUTH_REDIRECT_URI"],
+            nonce=nonce,
+        )
 
-@server.route("/oidc/callback")
-def auth_cb():
-    token = oauth.keycloak.authorize_access_token()
-    if 'id_token' not in token:
-        return "No id_token!", 400
+    @server.route("/oidc/callback")
+    def auth_cb():
+        token = oauth.keycloak.authorize_access_token()
+        if 'id_token' not in token:
+            return "No id_token!", 400
 
-    # decode just to pull out sub/email/name (you can skip signature‐verify for demo)
-    decoded = jwt.decode(token['id_token'], options={"verify_signature": False})
-    session["user"]     = {
-      "sub":   decoded.get("sub"),
-      "email": decoded.get("email", decoded.get("preferred_username")),
-      "name":  decoded.get("name", decoded.get("preferred_username")),
-    }
-    # <-- store the raw id_token so we can hint Keycloak on logout
-    session["id_token"] = token["id_token"]
+        decoded = jwt.decode(token['id_token'], options={"verify_signature": False})
+        session["user"] = {
+            "sub":   decoded.get("sub"),
+            "email": decoded.get("email", decoded.get("preferred_username")),
+            "name":  decoded.get("name", decoded.get("preferred_username")),
+        }
+        session["id_token"] = token["id_token"]
+        return redirect("/")
 
-    return redirect("/")
+    @server.route("/logout")
+    def logout():
+        id_token = session.get("id_token")
+        session.clear()
 
-from urllib.parse import urlencode
+        metadata = oauth.keycloak.load_server_metadata()
+        end_session = metadata.get(
+            "end_session_endpoint",
+            os.environ["OIDC_ISSUER"].rstrip("/") + "/protocol/openid-connect/logout"
+        )
 
-@server.route("/logout")
-def logout():
-    # Grab the raw id_token_hint we saved
-    id_token = session.get("id_token")
+        post_logout = url_for("login", _external=True)
 
-    # Wipe out our Flask session first
-    session.clear()
+        # Manual string concatenation (no urlencode)
+        url = f"{end_session}?post_logout_redirect_uri={post_logout}"
+        if id_token:
+            url += f"&id_token_hint={id_token}"
 
-    # Pull Keycloak’s metadata yourself
-    metadata = oauth.keycloak.load_server_metadata()
-    end_session = metadata.get(
-        "end_session_endpoint",
-        # fallback if metadata is missing
-        os.environ["OIDC_ISSUER"].rstrip("/") 
-        + "/protocol/openid-connect/logout"
-    )
+        return redirect(url)
 
-    # Where to send them back once Keycloak logs you out
-    post_logout = url_for("login", _external=True)
 
-    # Build the query string
-    params = {
-        "post_logout_redirect_uri": post_logout
-    }
-    if id_token:
-        params["id_token_hint"] = id_token
-
-    return redirect(f"{end_session}?{urlencode(params)}")
 
 # ─── Public Routes Middleware ─────────────────────────────────────────────────────────
 @server.before_request
@@ -423,8 +428,8 @@ toggle_btn = html.Button('Hide Missing Tactics',
                          className='fancy-button',
                          style={'padding':'6px', 'margin-top':'2px'})
 
-csrf_btn = html.Button('Test CSRF',
-                         id='csrf-btn', n_clicks=0,
+api_btn = html.Button('Test api',
+                         id='api-btn', n_clicks=0,
                          className='fancy-button',
                          style={'padding':'6px', 'margin-top':'2px'})
 
@@ -517,12 +522,12 @@ def serve_layout():
                     ], className="top-bar-user"),
                     
                     html.Div(toggle_btn, className="top-bar-toggle"),  # toggle button container
-                    html.Div(csrf_btn, className="top-bar-toggle"),  # toggle button container
+                    html.Div(api_btn, className="top-bar-toggle"),  # toggle button container
                 ], className='top-bar', id='top-bar')
             ]),
         ]),
 
-        html.Pre(id='csrf-btn-fdbk', style={'font-size': 'medium'}),
+        html.Pre(id='api-btn-fdbk', style={'font-size': 'medium'}),
 
         dcc.Graph(id='attack-chain-graph',
                 figure=fig_all,                 # start with all-tactics
@@ -554,7 +559,7 @@ def serve_layout():
     return layout
 
 app.layout = serve_layout
-
+app.title = 'Chainsmoker'
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  CALLBACKS
@@ -775,15 +780,21 @@ def save_node(
     return html.Pre('Node Saved!', style={'color': 'limegreen'}), fig_store
 
 @callback(
-    Output('csrf-btn-fdbk', 'children'),
-    Input('csrf-btn', 'n_clicks')
+    Output('api-btn-fdbk', 'children'),
+    Input('api-btn', 'n_clicks'),
+    prevent_initial_call=True
 )
-def csrf_fdbk(n_clicks):
+def api_fdbk(n_clicks):
     if n_clicks:
-        handler = OnionHandler(base_url="172.25.7.201")
+        handler = OnionHandler(
+        base_url="https://172.25.7.201",  # SO base url -> https://x.x.x.x
+        username="onion@fake.local",
+        password="awesome123Aa###",
+        api_key='dlRzSnk1WUJIZEFXUlZ4dUdaODM6Q1VicEQzNk5SUHVwYzRWN1RsalNEUQ=='
+    )
 
-        return handler.get_csrf_token()
-
+    cases = handler.login_and_cases()
+    return cases
 # ─────────────────────────────────────────────────────────────────────────────
 
 

@@ -1,0 +1,294 @@
+/* =========================================================================
+   1) VARIABLES
+   ========================================================================= */
+:root {
+  /* Colors */
+  --color-bg:           #0e0d0d;
+  --color-bg-alt:       #1e1e1e;
+  --color-bg-mid:       #242424;
+  --color-bg-light:     #2b2b2b;
+  --color-bg-input:     #343a40;
+  --color-border:       #444;
+  --color-border-2:     #555;
+  --color-text:         #f0f0f0;
+  --color-heading:      #ffffff;
+  --color-placeholder:  #898989;
+  --shadow-light:       rgba(255,255,255,0.1);
+
+  /* Spacing & Radius */
+  --space-xs: 4px;
+  --space-s:  8px;
+  --space-m: 12px;
+  --space-l: 16px;
+  --space-xl:24px;
+  --radius-s: 4px;
+  --radius-m: 6px;
+}
+
+/* =========================================================================
+   2) GLOBAL RESET & BASES
+   ========================================================================= */
+html, body {
+  margin: 0; padding: 0;
+  min-height: 100vh;
+  font-family: var(--font-base, "Open Sans", sans-serif);
+  background: var(--color-bg);
+  color: var(--color-text);
+  box-sizing: border-box;
+}
+*, *::before, *::after { box-sizing: inherit; }
+
+h1,h2,h3,h4,h5,h6 {
+  margin: 0; padding: var(--space-s) 0;
+  font-weight: var(--heading-fw,600);
+  color: var(--color-heading);
+}
+
+/* =========================================================================
+   3) LINKS & BUTTONS  (unchanged)
+   ========================================================================= */
+a, button {
+  font-size: var(--font-size,1rem);
+  line-height: 1.3;
+  color: var(--color-text);
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border-2);
+  border-radius: var(--radius-s);
+  padding: var(--space-s) var(--space-m);
+  transition: background .2s, transform .1s;
+  text-decoration: none;
+}
+a:hover, button:hover { background: #4f575c; cursor: pointer; }
+
+.fancy-button {
+  background: #444;
+  border-color: var(--color-border-2);
+  padding: var(--space-s) var(--space-l);
+}
+.fancy-button:hover { transform: scale(1.05); }
+
+/* =========================================================================
+   4) FORM CONTROLS  (all in one place!)
+   ========================================================================= */
+/* base style for text inputs, selects, textareas, dash-IO */
+input[type="text"],
+input[type="url"],
+input[type="password"],
+textarea,
+select,
+.dash-input,
+.dash-textarea,
+.form-control,
+.InputField > * {
+  width: 100%;
+  padding: var(--space-s) var(--space-m);
+  font: var(--font-size,1rem)/1.3 var(--font-base, "Open Sans", sans-serif);
+  color: var(--color-text);
+  background: var(--color-bg-light);
+  border: 1px solid var(--color-border-2);
+  border-radius: var(--radius-s);
+  margin-bottom: var(--space-m);
+}
+
+/* textarea override */
+textarea {
+  resize: vertical;
+  min-height: 100px;
+  border-radius: var(--radius-m);
+}
+
+/* placeholder color */
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-placeholder);
+  opacity: 1;
+}
+
+/* keep dark theme even on focus/blur/autofill */
+input:focus,
+textarea:focus,
+select:focus,
+.dash-input:focus,
+.dash-textarea:focus {
+  background: var(--color-bg-light) !important;
+  color:      var(--color-text)     !important;
+  border-color: var(--color-border-2) !important;
+  box-shadow: none                   !important;
+}
+input:-webkit-autofill,
+textarea:-webkit-autofill {
+  background-clip: content-box !important;
+  -webkit-text-fill-color: var(--color-text) !important;
+  background: var(--color-bg-light) !important;
+}
+
+/* =========================================================================
+   5) FORMS & WRAPPERS
+   ========================================================================= */
+form, .dbc-form, .dash-form, #node-form, #note-form {
+  max-width: 520px;
+  width: 100%;
+  padding: 0 var(--space-xs);
+  margin-bottom: var(--space-m);
+}
+.InputField { max-width: 500px; }
+
+/* =========================================================================
+   6) CONTAINERS & SECTIONS  (unchanged)
+   ========================================================================= */
+.page-title {
+  display: flex; align-items: center; gap: var(--space-s);
+  font-size: 2em;
+}
+.page-title img { border-radius: 50%; }
+
+.fig,
+.fancy-border,
+.setting-section {
+  background: var(--color-bg-mid);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-m);
+  padding: var(--space-m);
+  margin: var(--space-m) auto;
+}
+.fig:hover { box-shadow: 0 0 8px var(--shadow-light); }
+
+/* =========================================================================
+   7) DATATABLE  (unchanged)
+   ========================================================================= */
+#notes-table {
+  --dt-bg: var(--color-bg-light);
+}
+#notes-table .dash-spreadsheet            { background: var(--dt-bg); }
+#notes-table .dash-spreadsheet-container  { border: none; }
+#notes-table .dash-header-cell            {
+  background: #333;
+  border-bottom: 1px solid var(--color-border-2);
+  color: var(--color-text);
+}
+#notes-table .dash-cell {
+  border-bottom: 1px solid var(--color-border);
+}
+#notes-table .dash-cell:hover {
+  background: #3a3a3a;
+}
+
+/* =========================================================================
+   8) REACT-SELECT MENU & OPTIONS  (unchanged)
+   ========================================================================= */
+.Select-menu-outer {
+  background: var(--color-bg-light) !important;
+  border: 1px solid var(--color-border-2) !important;
+  box-shadow: none !important;
+}
+.Select-menu-outer .Select-option {
+  background: transparent !important;
+  color: var(--color-placeholder) !important;
+}
+.Select-menu-outer .Select-option--is-focused {
+  background: #3a3a3a !important;
+}
+.Select-menu-outer .Select-option--is-selected {
+  background: #444444 !important;
+  color: #ffffff !important;
+}
+/* always‐white selected pill */
+.Select--single.has-value > .Select-control .Select-value .Select-value-label,
+.Select--single.is-pseudo-focused > .Select-control .Select-value .Select-value-label {
+  color: #ffffff !important;
+}
+
+/* =========================================================================
+   9) DISABLED BUTTONS  (unchanged)
+   ========================================================================= */
+.btn:disabled,
+.btn.disabled {
+  background: var(--color-bg-mid) !important;
+  color: var(--color-text)       !important;
+  border-color: var(--color-border) !important;
+}
+
+/* =========================================================================
+  10) HYPER-SPECIFIC OVERRIDES  (left as-is)
+   ========================================================================= */
+.dark-dropdown .Select-control {
+  background-color: var(--color-bg-light) !important;
+  border-color:     var(--color-border-2) !important;
+}
+.dark-dropdown .Select-placeholder,
+.dark-dropdown .Select-value-label {
+  color: var(--color-text) !important;
+}
+
+#mitre-dropdown-node > div {
+  background-color: var(--color-bg-light) !important;
+  border-color:     var(--color-border-2) !important;
+}
+
+.Select.InputField.dark-dropdown.dark-node-dropdown.has-value.is-focused.is-searchable.Select--single {
+  background:    var(--color-bg-light)   !important;
+  border:        1px solid var(--color-border-2) !important;
+  border-radius: var(--radius-s)        !important;
+  margin-bottom: 12px;
+}
+
+.Select.InputField.dark-dropdown.dark-node-dropdown.has-value.is-focused.is-pseudo-focused.is-searchable.Select--single {
+  background:    var(--color-bg-light)   !important;
+  border:        1px solid var(--color-border-2) !important;
+  border-radius: var(--radius-s)        !important;
+  margin-bottom: 12px;
+}
+
+.Select.InputField.dark-dropdown.dark-node-dropdown.has-value.is-focused.is-searchable.Select--single
+  .Select-control {
+  background: transparent !important;
+  border:     none        !important;
+  box-shadow: none        !important;
+}
+
+/* =========================================================================
+   COMBINED DARK DROPDOWN FIXES
+   ========================================================================= */
+/* 1) Always keep .dark-dropdown and .dark-node-dropdown dark */
+.dark-dropdown .Select-control,
+.dark-node-dropdown .Select-control {
+  background-color: var(--color-bg-light)   !important;
+  border           : 1px solid var(--color-border-2) !important;
+  box-shadow       : none                     !important;
+}
+
+/* 2) Force placeholder & selected‐value text to stay white */
+.dark-dropdown .Select-placeholder,
+.dark-dropdown .Select-value-label,
+.dark-node-dropdown .Select-placeholder,
+.dark-node-dropdown .Select-value-label {
+  color: var(--color-text) !important;
+}
+
+/* 3) Keep the <input> itself dark and colored */
+.dark-dropdown .Select-input > input,
+.dark-node-dropdown .Select-input > input {
+  background: transparent       !important;
+  color     : var(--color-text) !important;
+}
+
+/* 4) Remove that extra bottom margin on focus/pseudo-focus */
+.Select--single.has-value.is-focused,
+.Select--single.has-value.is-pseudo-focused {
+  margin-bottom: var(--space-m) !important;
+}
+
+/* 5) (Optional) If you want to re-pad the control itself, do it here */
+.dark-dropdown .Select-control,
+.dark-node-dropdown .Select-control {
+  padding: var(--space-s) var(--space-m) !important;
+}
+
+.Select-input > input {
+  caret-color: transparent !important;
+}
+.dark-node-dropdown .Select-input > input {
+  color: var(--color-text)      !important;
+  background: transparent       !important;
+}
+

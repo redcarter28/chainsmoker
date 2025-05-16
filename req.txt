@@ -1,0 +1,16 @@
+dash==3.0.3
+dash-bootstrap-components
+pandas
+openpyxl
+plotly==5.23.0
+flask
+pyodbc
+flask-session
+flask-sqlalchemy
+psycopg2-binary
+authlib 
+pip-system-certs
+certifi
+PyJWT
+selenium
+cryptography

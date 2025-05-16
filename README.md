@@ -1,4 +1,9 @@
-# Chainsmoker
+# Chainsmoker 
+<p align="center">
+  <img src="app/assets/logo.png" alt="App Logo" width="200" />
+</p>
+
+
 A Chainsmoker is a dockerized Dash-based web application for viewing, annotating, and managing MITRE-style attack chains.  
 
 

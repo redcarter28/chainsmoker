@@ -1095,7 +1095,7 @@ def render_settings_tab(active_tab):
 
     elif active_tab == "tab-other":
         return dbc.CardBody([
-            html.P("Put your other settings here…")
+            html.P("hello")
         ])
 
     return "No tab selected"

@@ -21,7 +21,7 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
-COPY keycloak.crt /usr/local/share/ca-certificates/
+#COPY keycloak.crt /usr/local/share/ca-certificates/
 RUN update-ca-certificates
 
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt

@@ -413,3 +413,13 @@ class OnionHandler:
         self.cases = pd.DataFrame(flat_cases)
         return flat_cases
 
+
+class KibanaHandler:
+    def __init__(self, base_url="https://kibana.lan", username="elastic", password="yourpassword", api_key = 'No API Key Found', cases = pd.DataFrame()):
+        self.base_url = base_url
+        self.username = username
+        self.password = password
+        self.cookies = {}
+        self.api_key = api_key
+        self.cases=cases
+

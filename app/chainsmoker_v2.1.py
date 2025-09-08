@@ -26,8 +26,7 @@ import certifi
 import secrets
 import jwt
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
-from utility.seconion import OnionHandler
-from utility.kb import KibanaHandler
+from utility.handler import OnionHandler, KibanaHandler
 import utility.crypto as crypto
 from sqlalchemy import text
 from datetime import datetime

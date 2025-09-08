@@ -27,12 +27,14 @@ import secrets
 import jwt
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from utility.seconion import OnionHandler
+from utility.kb import KibanaHandler
 import utility.crypto as crypto
 from sqlalchemy import text
 from datetime import datetime
 import html as h
 import json 
 from sqlalchemy.exc import IntegrityError
+#gay
 
 context = ssl.create_default_context(cafile=certifi.where())
 http = urllib3.PoolManager(
@@ -79,8 +81,8 @@ PLOT_CONFIG = dict(
     },
 )
 
-# The certificate fingerprint you got from the openssl command
-EXPECTED_FINGERPRINT = "CB:12:CC:A5:55:F9:4A:97:97:FE:32:76:E3:89:53:36:76:EF:A3:07"  # Replace with your actual fingerprint
+
+EXPECTED_FINGERPRINT = "CB:12:CC:A5:55:F9:4A:97:97:FE:32:76:E3:89:53:36:76:EF:A3:07" 
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  CONSTANTS & HELPERS
@@ -1003,12 +1005,22 @@ def save_node(n_clicks, date, tactic, src, dst, details, notes, name, chain):
 
     return feedback, fig_normal, fig_store
 
+
+@app.callback(
+    Output("api-url-label", "children"),
+    Input("api-type", "value")
+)
+def update_label(api_type):
+    if api_type == "kb":
+        return "Kibana API Endpoint"
+    return "Base URL"
+
 @callback(Output("tabs-content", "children"),
           Input("settings-tabs", "active_tab"))
 def render_settings_tab(active_tab):
+    url_desc = ""
     if active_tab == "tab-api":
         return html.Div([
-
             # API SECTION
             html.Div([
                 html.H3("🔌 API Configuration", className="section-title"),
@@ -1026,7 +1038,7 @@ def render_settings_tab(active_tab):
             # Base URL
             # ———————————————————————————————————————————
             html.Div([
-                dbc.Label("Base URL", html_for="api-url"),
+                dbc.Label(url_desc, html_for="api-url"),
                 dbc.Input(
                     id="api-url",
                     type="url",
@@ -1138,7 +1150,7 @@ def pull_cases(n_clicks):
     if dash.callback_context.triggered_id != "api-btn":
         return dash.no_update, dash.no_update
 
-    api_type = session.get("api_type", "so")
+    api_type = session.get("api_type")
     base_url = session.get("api_url")
     user     = session.get("api_username")
     pwd_enc  = session.get("api_password", "")
@@ -1149,6 +1161,12 @@ def pull_cases(n_clicks):
 
     if api_type == "so":
         handler = OnionHandler(base_url=base_url,
+                               username=user,
+                               password=pwd,
+                               api_key=key)
+        
+    if api_type == "kb":
+        handler = KibanaHandler(base_url=base_url,
                                username=user,
                                password=pwd,
                                api_key=key)

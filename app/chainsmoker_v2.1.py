@@ -1017,7 +1017,6 @@ def update_label(api_type):
 @callback(Output("tabs-content", "children"),
           Input("settings-tabs", "active_tab"))
 def render_settings_tab(active_tab):
-    url_desc = ""
     if active_tab == "tab-api":
         return html.Div([
             # API SECTION
@@ -1037,7 +1036,7 @@ def render_settings_tab(active_tab):
             # Base URL
             # ———————————————————————————————————————————
             html.Div([
-                dbc.Label(url_desc, html_for="api-url"),
+                dbc.Label("Base URL", html_for="api-url"),
                 dbc.Input(
                     id="api-url",
                     type="url",

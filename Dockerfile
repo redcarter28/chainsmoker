@@ -1,5 +1,5 @@
 # Use a slim official Python image
-FROM python:3.13-bullseye
+FROM python:bullseye
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends gcc libpq-dev \
@@ -21,7 +21,9 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
-#COPY keycloak.crt /usr/local/share/ca-certificates/
+#COPY controller.crt /usr/local/share/ca-certificates/controller.crt
+#RUN update-ca-certificates
+
 RUN update-ca-certificates
 
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt

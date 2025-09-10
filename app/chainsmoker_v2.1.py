@@ -16,7 +16,6 @@ from flask import Flask, session, redirect, url_for, request
 from authlib.integrations.flask_client import OAuth
 import ssl
 import hashlib
-import socket
 from urllib.parse import urlparse
 import requests
 import urllib3
@@ -33,6 +32,8 @@ from datetime import datetime
 import html as h
 import json 
 from sqlalchemy.exc import IntegrityError
+from flask import send_file
+import io
 #gay
 
 context = ssl.create_default_context(cafile=certifi.where())
@@ -96,10 +97,15 @@ def custom_date_parser(date_str: str):
     return pd.to_datetime(date_str, format='%m/%d/%Y, %H%M', errors='coerce')
 
 def hash_node(clickData):
-    """Return the stable row_id that was stored in customdata."""
-    if clickData and clickData.get('points'):
-        return str(clickData['points'][0].get('customdata'))
+    """Return row_id from customdata as int, or None if unavailable."""
+    if clickData and clickData.get("points"):
+        val = clickData["points"][0].get("customdata")
+        try:
+            return int(val) if val is not None else None
+        except (ValueError, TypeError):
+            return None
     return None
+
 
 def clamp(i: int, lo: int, hi: int) -> int:
     """Return i clamped to the closed interval [lo, hi]."""
@@ -113,7 +119,7 @@ def memes(i, value):
             if 'Abraham Molina' in value:
                 return 'chainsmonker'
             if 'Cracraft' in value:
-                return 'The Venerable (Honorable) Distinguished Chief Warrant Officer 2 (II, two) Mr. Sir Dennis Cracraft'
+                return 'The Venerable (Honorable) Distinguished Chief Warrant Officer 2 (II, two) Mr. Sir D.E.N.N.I.S. Cracraft'
     return value
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -310,10 +316,20 @@ if requireAuth:
             url += f"&id_token_hint={id_token}"
 
         return redirect(url)
+    
+
+
+
+
+
 
 # ─── Public Routes Middleware ─────────────────────────────────────────────────────────
 @server.before_request
 def check_auth():
+
+    if not requireAuth:
+        return None
+
     public_paths = ["/login", "/oidc", "/_dash-", "/assets", "/favicon.ico"]
     if not session.get("user") and not any(request.path.startswith(p) for p in public_paths):
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -374,7 +390,9 @@ class AuthMiddleware:
             return self.app(environ, start_response)
 
 
-server.wsgi_app = AuthMiddleware(server.wsgi_app)
+if requireAuth:
+    server.wsgi_app = AuthMiddleware(server.wsgi_app)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  FIGURE BUILD
@@ -787,7 +805,7 @@ settings_view = dbc.Container([
     html.H2("⚙️ Settings"),
     dbc.Tabs(id="settings-tabs", active_tab="tab-api", children=[
         dbc.Tab(label="API Configuration", tab_id="tab-api"),
-        dbc.Tab(label="Other Stuff",     tab_id="tab-other"),
+        dbc.Tab(label="Data Management",     tab_id="tab-other"),
     ]),
     html.Div(id="tabs-content"),
 ], className="p-4")
@@ -800,11 +818,14 @@ settings_view = dbc.Container([
     Input('url', 'pathname')
 )
 def display_page(pathname):
-    match pathname:
-        case "/settings":
-            return settings_view
-    
-    return graph_view
+    if pathname in ["/", ""]:
+        return graph_view
+    elif pathname == "/settings":
+        return settings_view
+    else:
+        # Optional: show a 404 or default page
+        return html.Div("404 - Page not found", style={"padding": "2rem"})
+
 
 @callback(Output('zoom-state', 'data', allow_duplicate=True),
           Input('attack-chain-graph', 'relayoutData'),
@@ -897,17 +918,25 @@ def update_graph(figs_dict, n_clicks, zoom, flag):
     prevent_initial_call=True
 )
 def notes_clickdata(n_clicks, clickData, tactic, date, name, note_input):
-    if not clickData:
-        return "Error: No node selected.", dash.no_update
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        raise dash.exceptions.PreventUpdate
 
-    node_id = hash_node(clickData)
-    if not node_id:
-        return "Error: Unable to determine node ID.", dash.no_update
-
+    triggered_id = ctx.triggered_id
     feedback = ""
-    # If they clicked Save, insert a new row in node_comment
-    ctx_id = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
-    if ctx_id == "save-button" and note_input:
+
+    # --- Save note if Save button triggered ---
+    if triggered_id == "save-button":
+        if not clickData:
+            return "⚠️ No node selected.", dash.no_update
+        if not note_input:
+            return "⚠️ Note is empty.", dash.no_update
+
+        node_id = hash_node(clickData)
+        if not node_id:
+            return "⚠️ Could not determine node ID.", dash.no_update
+
+        # insert note
         comment = NodeComment(
             node_id=node_id,
             operator=name or "unknown",
@@ -917,21 +946,19 @@ def notes_clickdata(n_clicks, clickData, tactic, date, name, note_input):
         )
         db.session.add(comment)
         db.session.commit()
-        feedback = "Notes Saved!"
+        feedback = "✅ Notes Saved!"
 
-    # Now always re-query all comments for this node_id
+    # --- Always update comments panel if clickData is present ---
+    if not clickData:
+        return feedback or "⚠️ No node selected.", dash.no_update
+
+    node_id = hash_node(clickData)
     comments = NodeComment.query.filter_by(node_id=node_id).order_by(NodeComment.created).all()
     notes = [
-        {
-          "operator": c.operator,
-          "tactic":   c.tactic,
-          "date":     c.date,
-          "note":     c.note
-        }
+        {"operator": c.operator, "tactic": c.tactic, "date": c.date, "note": c.note}
         for c in comments
     ]
 
-    # Build your hover text + table as before
     raw_text = clickData["points"][0]["text"]
     hover_txt = (h.unescape(
                     re.sub(r"<.*?>", "", re.sub(r"(<br\s*/?>)+", "\n", raw_text))
@@ -952,6 +979,7 @@ def notes_clickdata(n_clicks, clickData, tactic, date, name, note_input):
         table_div = html.Div([hover_txt, "\n\nComments are empty. Consider hunting harder."])
 
     return feedback, [table_div]
+
 
 @callback(
     Output('notes-hide', 'style'),
@@ -1005,14 +1033,15 @@ def save_node(n_clicks, date, tactic, src, dst, details, notes, name, chain):
     return feedback, fig_normal, fig_store
 
 
-@app.callback(
-    Output("api-url-label", "children"),
+@callback(
+    [Output("api-url-label", "children"),
+    Output("api-username", "placeholder")],
     Input("api-type", "value")
 )
 def update_label(api_type):
     if api_type == "kb":
-        return "Kibana API Endpoint"
-    return "Base URL"
+        return "Kibana API Endpoint", 'elastic'
+    return "Base URL", 'onion@fake.local'
 
 @callback(Output("tabs-content", "children"),
           Input("settings-tabs", "active_tab"))
@@ -1036,7 +1065,7 @@ def render_settings_tab(active_tab):
             # Base URL
             # ———————————————————————————————————————————
             html.Div([
-                dbc.Label("Base URL", html_for="api-url"),
+                dbc.Label(html_for="api-url", id="api-url-label"),
                 dbc.Input(
                     id="api-url",
                     type="url",
@@ -1105,8 +1134,106 @@ def render_settings_tab(active_tab):
 
     elif active_tab == "tab-other":
         return dbc.CardBody([
-            html.P("hello")
-        ])
+
+            html.H3("⚙️ Data Management", className="mb-4 text-center"),
+
+            dbc.Row([
+                # Export card
+                # inside your Data Management tab layout
+                dbc.Col(
+                    dbc.Card(
+                        dbc.CardBody([
+                            html.H5("Export", className="card-title"),
+                            html.P(
+                                "Download the current database as a JSON file.",
+                                className="card-text"
+                            ),
+                            # Download component (invisible)
+                            dcc.Download(id="download-db"),
+
+                            dbc.Button(
+                                "⬇️ Export Database",
+                                id="export-btn",
+                                color="primary",
+                                className="w-100"
+                            ),
+                            html.Div(id="export-feedback", className="mt-3"),
+                        ]),
+                        className="shadow-sm mb-4"
+                    ),
+                    md=4
+                ),
+
+
+                # Import card
+                dbc.Col(
+                    dbc.Card(
+                        dbc.CardBody([
+                            html.H5("Import", className="card-title"),
+                            html.P(
+                                "Upload a previously exported JSON file to restore or merge data. "
+                                "Duplicates will be skipped automatically.",
+                                className="card-text"
+                            ),
+                            dcc.Upload(
+                                id="upload-data",
+                                children=html.Div([
+                                    html.I(className="bi bi-upload me-2"),
+                                    "Drag & Drop or ",
+                                    html.A("Select a File")
+                                ]),
+                                style={
+                                    "width": "100%", "height": "80px", "lineHeight": "80px",
+                                    "borderWidth": "2px", "borderStyle": "dashed",
+                                    "borderRadius": "8px", "textAlign": "center",
+                                    "marginTop": "10px", "cursor": "pointer"
+                                },
+                                multiple=False
+                            ),
+                            html.Div(id="upload-feedback", className="mt-3"),
+                        ]),
+                        className="shadow-sm mb-4"
+                    ),
+                    md=4
+                ),
+            
+                dbc.Col(
+                    dbc.Card(
+                        dbc.CardBody([
+                            html.H5("Danger Zone", style={"color": "indianred"}),
+                            html.P(
+                                "This will absolutely nuke your SQL backend.",
+                                className="card-text"
+                            ),
+                            dbc.Input(
+                                id="wipe-confirm",
+                                type="text",
+                                placeholder="Type 'saturn burger' to confirm",
+                                className="mb-2"
+                            ),
+                            dbc.Button(
+                                "💀 Wipe Entire Database 💀",
+                                id="btn-wipe-db",
+                                color="danger",
+                                disabled=True,  # start disabled
+                                className="fancy-button",
+                                style={"marginTop": "10px"}
+                            ),
+                            html.Div(id="wipe-feedback", style={"marginTop": "10px"})
+                        ]),
+                        className="shadow-sm mb-4"
+                    ),
+                    md=4
+                ),
+            
+            
+            
+            ], justify="center"),
+
+        ], className="p-4")
+
+
+
 
     return "No tab selected"
 
@@ -1283,7 +1410,138 @@ def delete_selected_node(n_clicks, clickData):
     }
 
     return dbc.Alert("Deleted Node Successfully", color="warning", duration=4000), fig_store
+
+@callback(
+    Output("upload-feedback", "children"),
+    Output("fig-store", "data", allow_duplicate=True),
+    Input("upload-data", "contents"),
+    State("upload-data", "filename"),
+    prevent_initial_call=True
+)
+def ingest_upload(contents, filename):
+    import base64
+    if not contents:
+        raise dash.exceptions.PreventUpdate
+
+    # Decode uploaded file
+    content_type, content_string = contents.split(",")
+    decoded = base64.b64decode(content_string)
+    data = json.loads(decoded.decode("utf-8"))
+
+    attack_rows = data.get("attack_chain", [])
+    comment_rows = data.get("node_comments", [])
+
+    inserted, skipped = 0, 0
+
+    existing_attack_ids = {row.row_id for row in AttackChain.query.all()}
+    existing_comment_ids = {row.id for row in NodeComment.query.all()}
+
+    for row in attack_rows:
+        if row["row_id"] in existing_attack_ids:
+            skipped += 1
+            continue
+        db.session.add(AttackChain(**row))
+        inserted += 1
+
+    for row in comment_rows:
+        if row["id"] in existing_comment_ids:
+            skipped += 1
+            continue
+        db.session.add(NodeComment(**row))
+        inserted += 1
+
+    db.session.commit()
+
+    # 🔥 Rebuild graphs after import
+    fig_normal, fig_all, *_ = chainsmoker_db()
+    fig_store = {
+        "normal": fig_normal.to_dict(),
+        "all":    fig_all.to_dict()
+    }
+
+    return (
+        dbc.Alert(
+            f"✅ Imported {inserted} rows, skipped {skipped} duplicates.",
+            color="success", dismissable=True
+        ),
+        fig_store
+    )
+
+
+@callback(
+    Output("btn-wipe-db", "disabled"),
+    Input("wipe-confirm", "value")
+)
+def enable_wipe_button(confirm_text):
+    return confirm_text != "saturn burger"  # button enabled only if exact match
+
+@callback(
+    Output("wipe-feedback", "children"),
+    Output("fig-store", "data", allow_duplicate=True),
+    Input("btn-wipe-db", "n_clicks"),
+    State("wipe-confirm", "value"),
+    prevent_initial_call=True
+)
+def wipe_database(n_clicks, confirm_text):
+    if confirm_text != "saturn burger":
+        return dbc.Alert("❌ Confirmation failed. Type 'saturn burger' to proceed.", color="danger"), dash.no_update
+
+    try:
+        # Remove all rows from both tables
+        db.session.query(NodeComment).delete()
+        db.session.query(AttackChain).delete()
+        db.session.commit()
+
+        # Rebuild figures (empty state)
+        fig_normal, fig_all, *_ = chainsmoker_db()
+        fig_store = {
+            "normal": fig_normal.to_dict(),
+            "all": fig_all.to_dict()
+        }
+
+        return (
+            dbc.Alert("💀 Database wiped successfully.", color="danger", duration=4000),
+            fig_store
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        return dbc.Alert(f"⚠️ Error: {e}", color="warning"), dash.no_update
+
+@callback(
+    Output("download-db", "data"),
+    Output("export-feedback", "children"),
+    Input("export-btn", "n_clicks"),
+    prevent_initial_call=True
+)
+def export_data_cb(n_clicks):
+    if not n_clicks:
+        raise dash.exceptions.PreventUpdate
+
+    # Pull both tables into pandas DataFrames
+    attack_df = pd.read_sql_table("attack_chain", db.engine)
+    comments_df = pd.read_sql_table("node_comments", db.engine)
+
+    export = {
+        "attack_chain": json.loads(attack_df.to_json(orient="records", date_format="iso")),
+        "node_comments": json.loads(comments_df.to_json(orient="records", date_format="iso"))
+    }
+
+    return (
+        dict(
+            content=json.dumps(export, indent=2),
+            filename="chainsmoker_export.json"
+        ),
+        dbc.Alert("✅ Database exported successfully.", color="success", dismissable=True)
+    )
+
+
+
+
+
 # ─────────────────────────────────────────────────────────────────────────────
+
+
 
 
 if __name__ == '__main__':
